@@ -1,26 +1,26 @@
 'use client';
 
 interface EditorState {
-  config: any;
+  config: unknown;
   roomMapImage: File | null;
   roomMapPreviewUrl: string | null;
   selectedScenarioId: string | null;
   selectedMarkerId: string | null;
   loadXML: (xmlString: string) => void;
-  exportFile: () => any;
+  exportFile: () => unknown;
   addScenario: (name?: string) => void;
   deleteScenario: (id: string) => void;
-  updateScenario: (id: string, updates: any) => void;
-  addSource: (scenarioId: string, position?: any) => void;
+  updateScenario: (id: string, updates: unknown) => void;
+  addSource: (scenarioId: string, position?: unknown) => void;
   removeSource: (scenarioId: string, sourceId: string) => void;
-  addReceiver: (scenarioId: string, position?: any, fileNames?: string[]) => void;
+  addReceiver: (scenarioId: string, position?: unknown, fileNames?: string[]) => void;
   removeReceiver: (scenarioId: string, receiverId: string) => void;
-  updatePosition: (scenarioId: string, markerId: string, positionData: any) => void;
+  updatePosition: (scenarioId: string, markerId: string, positionData: unknown) => void;
   updateFilePaths: (scenarioId: string, receiverId: string, fileNames: string[]) => void;
   loadRoomMap: (file: File) => void;
-  bulkLoad: (scenarioId: string, target: any, lines: any[]) => void;
-  setRoom: (room: any) => void;
-  setInfo: (info: any) => void;
+  bulkLoad: (scenarioId: string, target: unknown, lines: unknown[]) => void;
+  setRoom: (room: unknown) => void;
+  setInfo: (info: unknown) => void;
   clearAll: () => void;
 }
 

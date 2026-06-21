@@ -20,28 +20,29 @@ export interface ParsedConfig {
   }>;
 }
 
-function unwrap(val: any): any {
+function unwrap(val: unknown): unknown {
   if (Array.isArray(val)) return val[0];
   return val;
 }
 
-function getAttr(obj: any, key: string): string {
-  const val = obj ? obj[key] : undefined;
+function getAttr(obj: unknown, key: string): string {
+  const o = obj as Record<string, unknown> | undefined;
+  const val = o ? o[key] : undefined;
   if (val !== undefined) return String(unwrap(val));
   const uKey = key.startsWith('_') ? key.slice(1) : `_${key}`;
-  const uVal = obj ? obj[uKey] : undefined;
+  const uVal = o ? o[uKey] : undefined;
   if (uVal !== undefined) return String(unwrap(uVal));
   return '';
 }
 
-function getNum(obj: any, key: string): number {
+function getNum(obj: unknown, key: string): number {
   return parseFloat(getAttr(obj, key)) || 0;
 }
 
-function unwrapObj(obj: any): Record<string, string | undefined | number> {
+function unwrapObj(obj: unknown): Record<string, string | undefined | number> {
   if (!obj || typeof obj !== 'object') return {};
   const result: Record<string, string | undefined | number> = {};
-  for (const [k, v] of Object.entries(obj)) {
+  for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
     const unwrapped = unwrap(v);
     // If still an array, take its first element
     const finalVal = Array.isArray(unwrapped) ? unwrap(unwrapped) : unwrapped;
@@ -54,7 +55,7 @@ export function parseConfigXML(xmlString: string): ParsedConfig {
   const parser = new XMLParser({
     ignoreAttributes: false,
     attributeNamePrefix: '_',
-    isArray: (tagName) => true,
+    isArray: (_tagName) => true,
   });
 
   const parsed = parser.parse(xmlString);
@@ -89,7 +90,7 @@ export function parseConfigXML(xmlString: string): ParsedConfig {
     const locked: 'source' | 'receiver' | 'none' = getAttr(sc, '_locked') === 'source' || getAttr(sc, '_locked') === 'receiver' ? getAttr(sc, '_locked') : 'none';
     const name = getAttr(sc, '_name') || '';
 
-    const parsedScenario: any = { name, locked };
+    const parsedScenario: Record<string, unknown> = { name, locked };
 
     // Check for single locked source at scenario root level
     if (locked === 'source' && sc.source) {
@@ -118,7 +119,7 @@ export function parseConfigXML(xmlString: string): ParsedConfig {
     }
 
     // Check for multiple sources: source_1, source_2, etc.
-    const lockedSources: any[] = [];
+    const lockedSources: unknown[] = [];
     let n = 1;
     while (sc[`source_${n}`]) {
       const sEl = sc[`source_${n}`];
@@ -140,7 +141,7 @@ export function parseConfigXML(xmlString: string): ParsedConfig {
     // Check for <sources> wrapped array - may have nested { source: [...] } structure
     if (sc.sources) {
       const sourcesInner = sc.sources;
-      const sourceItems: any[] = [];
+      const sourceItems: unknown[] = [];
       for (const s of Array.isArray(sourcesInner) ? sourcesInner : [sourcesInner]) {
         if (s && typeof s === 'object') {
           if (s.source) {
@@ -160,7 +161,7 @@ export function parseConfigXML(xmlString: string): ParsedConfig {
     // Check for <receivers> wrapped array - may have nested { receiver: [...] } structure
     if (sc.receivers) {
       const recvsInner = sc.receivers;
-      const recvItems: any[] = [];
+      const recvItems: unknown[] = [];
       for (const r of Array.isArray(recvsInner) ? recvsInner : [recvsInner]) {
         if (r && typeof r === 'object') {
           if (r.receiver) {
