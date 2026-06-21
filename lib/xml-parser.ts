@@ -87,10 +87,11 @@ export function parseConfigXML(xmlString: string): ParsedConfig {
 
   for (const sc of scArray) {
     if (!sc || typeof sc !== 'object') continue;
-    const locked: 'source' | 'receiver' | 'none' = getAttr(sc, '_locked') === 'source' || getAttr(sc, '_locked') === 'receiver' ? getAttr(sc, '_locked') : 'none';
+    const lockedValue = getAttr(sc, '_locked');
+    const locked: 'source' | 'receiver' | 'none' = (lockedValue === 'source' || lockedValue === 'receiver') ? lockedValue : 'none';
     const name = getAttr(sc, '_name') || '';
 
-    const parsedScenario: Record<string, unknown> = { name, locked };
+    const parsedScenario: { name: string; locked: 'source' | 'receiver' | 'none'; [key: string]: unknown } = { name, locked };
 
     // Check for single locked source at scenario root level
     if (locked === 'source' && sc.source) {

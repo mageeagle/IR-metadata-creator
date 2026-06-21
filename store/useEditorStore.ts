@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, createContext, useContext } from 'react';
 import type { ConfigModel, Source, Receiver, Position, BulkLoadTarget, RoomConfig } from '../lib/types';
 import { parseConfigXML } from '../lib/xml-parser';
 import { serializeConfigToXML } from '../lib/xml-serializer';
@@ -309,6 +309,15 @@ export function useEditorStore() {
     setState({ config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null });
   }, [state.roomMapPreviewUrl]);
 
+  const setSelectedScenarioId = useCallback((id: string | null) => {
+    setState(prev => ({ ...prev, selectedScenarioId: id }));
+  }, []);
+
+  const setSelectedMarkerId = useCallback((id: string | null) => {
+    console.log('SET selectedMarkerId:', id);
+    setState(prev => ({ ...prev, selectedMarkerId: id }));
+  }, []);
+
   useEffect(() => {
     if (state.config) saveToLocalStorage(state.config);
   }, [state.config, saveToLocalStorage]);
@@ -331,5 +340,8 @@ export function useEditorStore() {
     setRoom,
     setInfo,
     clearAll,
+    setSelectedScenarioId,
+    setSelectedMarkerId,
   };
 }
+

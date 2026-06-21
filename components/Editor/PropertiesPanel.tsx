@@ -1,7 +1,6 @@
 'use client';
 
-import type { Scenario } from '../../lib/types';
-import { useEditorStore } from '../../store/useEditorStore';
+import type { ConfigModel, Position, Scenario } from '../../lib/types';
 import { Button } from '../common/Button';
 
 function PositionInputs({
@@ -160,20 +159,69 @@ function MovingReceiverCard({
   );
 }
 
-export default function PropertiesPanel(_props: Record<string, unknown>) {
-  const {
-    config,
-    selectedScenarioId,
-    updateScenario,
-    addSource,
-    removeSource,
-    addReceiver,
-    removeReceiver,
-    updatePosition,
-    updateFilePaths,
-  } = useEditorStore();
+function LockedReceiverCard({
+  receiver,
+  onPositionChange,
+}: {
+  receiver: NonNullable<Scenario['lockedReceivers']>[number];
+  onPositionChange: (updates: Partial<{ x: number; y: number; z: number; rotX: number; rotY: number; rotZ: number }>) => void;
+}) {
+  return (
+    <div className="p-2 rounded bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
+      <PositionInputs
+        position={receiver.position}
+        onPositionChange={onPositionChange}
+      />
+    </div>
+  );
+}
 
+interface PropertiesPanelProps {
+  config: ConfigModel | null;
+  selectedScenarioId: string | null;
+  selectedMarkerId: string | null;
+  updateScenario: (id: string, updates: { name?: string; locked?: 'source' | 'receiver' | 'none' }) => void;
+  addSource: (scenarioId: string, position?: Partial<Position>) => void;
+  removeSource: (scenarioId: string, sourceId: string) => void;
+  addReceiver: (scenarioId: string, position?: Partial<Position>, fileNames?: string[]) => void;
+  removeReceiver: (scenarioId: string, receiverId: string) => void;
+  updatePosition: (scenarioId: string, markerId: string, positionData: Partial<Position>) => void;
+  updateFilePaths: (scenarioId: string, receiverId: string, fileNames: string[]) => void;
+}
+
+export default function PropertiesPanel({
+  config,
+  selectedScenarioId,
+  selectedMarkerId,
+  updateScenario,
+  addSource,
+  removeSource,
+  addReceiver,
+  removeReceiver,
+  updatePosition,
+  updateFilePaths,
+}: PropertiesPanelProps) {
   const scenario = config?.scenarios.find((s) => s.id === selectedScenarioId) ?? null;
+
+  let markerType: 'source' | 'receiver' | null = null;
+  let markerId: string | null = null;
+  if (selectedMarkerId && selectedScenarioId && selectedMarkerId.startsWith(`${selectedScenarioId}::`)) {
+    const parts = selectedMarkerId.split('::');
+    if (parts.length >= 2) {
+      markerId = parts[1];
+      const sourceExists = scenario?.sources?.some(s => s.id === markerId) ||
+                          scenario?.lockedSources?.some(s => s.id === markerId);
+      if (sourceExists) {
+        markerType = 'source';
+      } else {
+        const receiverExists = scenario?.receivers?.some(r => r.id === markerId) ||
+                              scenario?.lockedReceivers?.some(r => r.id === markerId);
+        if (receiverExists) {
+          markerType = 'receiver';
+        }
+      }
+    }
+  }
 
   if (!config || !selectedScenarioId) {
     return (
@@ -207,6 +255,12 @@ export default function PropertiesPanel(_props: Record<string, unknown>) {
     const source = scenario.lockedSources[idx];
     if (!source) return;
     updatePosition(scenario.id, source.id, updates);
+  };
+
+  const handleUpdateLockedReceiverPosition = (idx: number, updates: Partial<{ x: number; y: number; z: number; rotX: number; rotY: number; rotZ: number }>) => {
+    const receiver = scenario.lockedReceivers[idx];
+    if (!receiver) return;
+    updatePosition(scenario.id, receiver.id, updates);
   };
 
   const handleUpdateSourcePosition = (idx: number, updates: Partial<{ x: number; y: number; z: number; rotX: number; rotY: number; rotZ: number }>) => {
@@ -278,67 +332,125 @@ export default function PropertiesPanel(_props: Record<string, unknown>) {
           </select>
         </div>
 
-        {/* Locked Sources */}
-        {scenario.locked === 'source' && (
-          <div className="space-y-1.5">
-            <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Locked Sources</label>
-            {(scenario.lockedSources || []).map((source, idx) => (
-              <LockedSourceCard
-                key={source.id}
-                source={source}
-                onPositionChange={(updates) => handleUpdateLockedPosition(idx, updates)}
-              />
-            ))}
-          </div>
-        )}
+        {/* Single marker selected - show only that marker's properties */}
+        {markerType === 'source' && (() => {
+          const source = scenario.lockedSources?.find(s => s.id === markerId) ?? scenario.sources?.find(s => s.id === markerId);
+          if (!source) return null;
+          const isLocked = !!scenario.lockedSources?.find(s => s.id === markerId);
+          return (
+            <>
+              {isLocked ? (
+                <LockedSourceCard
+                  source={source}
+                  onPositionChange={(updates) => handleUpdateLockedPosition(scenario.lockedSources!.findIndex(s => s.id === markerId!), updates)}
+                />
+              ) : (
+                <MovingSourceCard
+                  source={source}
+                  onPositionChange={(updates) => handleUpdateSourcePosition(scenario.sources!.findIndex(s => s.id === markerId!), updates)}
+                  onRemove={() => handleRemoveSource(scenario.sources!.findIndex(s => s.id === markerId!))}
+                />
+              )}
+            </>
+          );
+        })()}
 
-        {/* Moving Sources */}
-        {scenario.locked !== 'receiver' && (
-          <div className="space-y-1.5">
-            <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Sources</label>
-            {(scenario.sources || []).map((source, idx) => (
-              <MovingSourceCard
-                key={source.id}
-                source={source}
-                onPositionChange={(updates) => handleUpdateSourcePosition(idx, updates)}
-                onRemove={() => handleRemoveSource(idx)}
+        {markerType === 'receiver' && (() => {
+          const lockedReceiver = scenario.lockedReceivers?.find(r => r.id === markerId);
+          const movingReceiver = scenario.receivers?.find(r => r.id === markerId);
+          const receiver = lockedReceiver ?? movingReceiver;
+          if (!receiver) return null;
+          if (lockedReceiver) {
+            const idx = scenario.lockedReceivers!.findIndex(r => r.id === markerId);
+            return (
+              <LockedReceiverCard
+                receiver={lockedReceiver}
+                onPositionChange={(updates) => handleUpdateLockedReceiverPosition(idx, updates)}
               />
-            ))}
-          </div>
-        )}
+            );
+          }
+          const idx = scenario.receivers!.findIndex(r => r.id === markerId);
+          return (
+            <MovingReceiverCard
+              key={receiver.id}
+              receiver={receiver}
+              scenarioId={scenario.id}
+              onPositionChange={(updates) => handleUpdateReceiverPosition(idx, updates)}
+              onFilePathsChange={(fileNames) => handleUpdateReceiverFilePaths(idx, fileNames)}
+              onAddChannel={() => handleAddChannel(idx)}
+              onRemove={() => handleRemoveReceiver(idx)}
+            />
+          );
+        })()}
 
-        {/* Moving Receivers */}
-        {scenario.locked !== 'source' && (
-          <div className="space-y-1.5">
-            <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Receivers</label>
-            {(scenario.receivers || []).map((receiver, idx) => (
-              <MovingReceiverCard
-                key={receiver.id}
-                receiver={receiver}
-                scenarioId={scenario.id}
-                onPositionChange={(updates) => handleUpdateReceiverPosition(idx, updates)}
-                onFilePathsChange={(fileNames) => handleUpdateReceiverFilePaths(idx, fileNames)}
-                onAddChannel={() => handleAddChannel(idx)}
-                onRemove={() => handleRemoveReceiver(idx)}
-              />
-            ))}
-          </div>
+        {/* No specific marker selected - show all markers */}
+        {markerType === null && (
+          <>
+            {/* Locked Sources */}
+            {scenario.locked === 'source' && (
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Locked Sources</label>
+                {(scenario.lockedSources || []).map((source, idx) => (
+                  <LockedSourceCard
+                    key={source.id}
+                    source={source}
+                    onPositionChange={(updates) => handleUpdateLockedPosition(idx, updates)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Moving Sources */}
+            {scenario.locked !== 'receiver' && (
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Sources</label>
+                {(scenario.sources || []).map((source, idx) => (
+                  <MovingSourceCard
+                    key={source.id}
+                    source={source}
+                    onPositionChange={(updates) => handleUpdateSourcePosition(idx, updates)}
+                    onRemove={() => handleRemoveSource(idx)}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/* Moving Receivers */}
+            {scenario.locked !== 'source' && (
+              <div className="space-y-1.5">
+                <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Receivers</label>
+                {(scenario.receivers || []).map((receiver, idx) => (
+                  <MovingReceiverCard
+                    key={receiver.id}
+                    receiver={receiver}
+                    scenarioId={scenario.id}
+                    onPositionChange={(updates) => handleUpdateReceiverPosition(idx, updates)}
+                    onFilePathsChange={(fileNames) => handleUpdateReceiverFilePaths(idx, fileNames)}
+                    onAddChannel={() => handleAddChannel(idx)}
+                    onRemove={() => handleRemoveReceiver(idx)}
+                  />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
 
-      {/* Add buttons */}
-      <div className="p-1.5 border-t border-gray-200 dark:border-gray-700 space-y-1">
-        {scenario.locked !== 'source' && (
-          <Button variant="primary" className="w-full text-xs" onClick={handleAddSource}>
-            + Add Source
-          </Button>
-        )}
-        {scenario.locked !== 'receiver' && (
-          <Button variant="success" className="w-full text-xs" onClick={handleAddReceiver}>
-            + Add Receiver
-          </Button>
-        )}
-      </div>
+      {/* Add buttons - only shown when no specific marker selected */}
+      {markerType === null && (
+        <div className="p-1.5 border-t border-gray-200 dark:border-gray-700 space-y-1">
+          {scenario.locked !== 'source' && (
+            <Button variant="primary" className="w-full text-xs" onClick={handleAddSource}>
+              + Add Source
+            </Button>
+          )}
+          {scenario.locked !== 'receiver' && (
+            <Button variant="success" className="w-full text-xs" onClick={handleAddReceiver}>
+              + Add Receiver
+            </Button>
+          )}
+        </div>
+      )}
     </aside>
   );
 }

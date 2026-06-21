@@ -41,7 +41,6 @@ export function serializeConfigToXML(config: ConfigModel): string {
     ignoreAttributes: false,
     attributeNamePrefix: '_',
     format: false,
-    cdataPadding: '',
   });
 
   let xml = '<root>\n\n';
@@ -62,12 +61,12 @@ export function serializeConfigToXML(config: ConfigModel): string {
     // Locked sources (multiple)
     for (let i = 0; i < scenario.lockedSources.length; i++) {
       const src = scenario.lockedSources[i];
-      xml += `\t\t<source_${i + 1}${formatPositionXml('src', { x: parseFloat(String(src.src_x || 0)), y: parseFloat(String(src.src_y || 0)), z: parseFloat(String(src.src_z || 0)), rotX: 0, rotY: parseFloat(String(src.rot_y || 0)), rotZ: parseFloat(String(src.rot_z || 0)) })}/>`;
+      xml += `\t\t<source_${i + 1}${formatPositionXml('src', { x: src.position.x, y: src.position.y, z: src.position.z, rotX: 0, rotY: src.position.rotY, rotZ: src.position.rotZ })}/>`;
     }
 
-    // Locked receiver (single)
-    if (scenario.lockedReceiver) {
-      xml += `\t\t<receiver${formatPositionXml('rcv', { x: parseFloat(String(scenario.lockedReceiver.rcv_x || 0)), y: parseFloat(String(scenario.lockedReceiver.rcv_y || 0)), z: parseFloat(String(scenario.lockedReceiver.rcv_z || 0)) as number, rotX: 0, rotY: parseFloat(String(scenario.lockedReceiver.rot_y || 0)), rotZ: parseFloat(String(scenario.lockedReceiver.rot_z || 0)) as number })}/>`;
+    // Locked receivers
+    for (const lr of scenario.lockedReceivers) {
+      xml += `\t\t<receiver${formatPositionXml('rcv', { x: lr.position.x, y: lr.position.y, z: lr.position.z, rotX: 0, rotY: lr.position.rotY, rotZ: lr.position.rotZ })}/>`;
     }
 
     // Moving sources (wrapped in <sources>)

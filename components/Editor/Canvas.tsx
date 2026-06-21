@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import type { ConfigModel, RoomConfig, Scenario, Position } from '@/lib/types';
+import { useState, useCallback, useEffect, useRef } from 'react';
+import Image from 'next/image';
+import type { ConfigModel, RoomConfig, Position } from '@/lib/types';
 
 interface EditorState {
   config: ConfigModel | null;
@@ -25,9 +26,9 @@ interface EditorState {
   setRoom: (room: RoomConfig) => void;
   setInfo: (info: { data: string }) => void;
   clearAll: () => void;
+  setSelectedScenarioId: (id: string | null) => void;
+  setSelectedMarkerId: (id: string | null) => void;
 }
-
-interface CanvasProps extends EditorState {}
 
 function getMarkerCenterPx(
   markerX: number,
@@ -49,37 +50,16 @@ function getMarkerCenterPx(
   };
 }
 
-function pxToRoom(
-  mouseX: number,
-  mouseY: number,
-  containerEl: HTMLElement | null,
-  room: RoomConfig | undefined,
-): { x: number; y: number } | null {
-  if (!containerEl || !room) return null;
-  const rect = containerEl.getBoundingClientRect();
-  const canvasWidth = rect.width;
-  const canvasHeight = rect.height;
-  const relX = mouseX - rect.left;
-  const relY = mouseY - rect.top;
-  const pixelsPerX = canvasWidth / room.width;
-  const pixelsPerY = canvasHeight / room.height;
-  return {
-    x: (relX / canvasWidth) * room.width + room.originX,
-    y: (relY / canvasHeight * room.height) + room.originY,
-  };
-}
-
 function Canvas({
   config,
   roomMapPreviewUrl,
   selectedScenarioId,
   selectedMarkerId,
   addSource,
-  removeSource,
   addReceiver,
-  removeReceiver,
   updatePosition,
-}: CanvasProps) {
+  setSelectedMarkerId,
+}: EditorState) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
   const [dragState, setDragState] = useState<{
@@ -88,6 +68,7 @@ function Canvas({
     startMouseX: number;
     startMouseY: number;
   }>({ isDragging: false, draggedMarkerId: null, startMouseX: 0, startMouseY: 0 });
+  const [dragRoomPos, setDragRoomPos] = useState<{ x: number; y: number } | null>(null);
 
   const room = config?.room;
 
@@ -106,7 +87,7 @@ function Canvas({
 
   // Drag handlers using document-level events
   const handleMouseDown = useCallback(
-    (markerId: string, scenarioId: string, currentX: number, currentY: number) => (
+    (markerId: string, scenarioId: string) => (
       e: React.MouseEvent
     ) => {
       e.preventDefault();
@@ -120,16 +101,40 @@ function Canvas({
     [],
   );
 
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      setDragState((prev) => ({ ...prev, startMouseX: e.clientX, startMouseY: e.clientY }));
+      const el = containerRef.current;
+      if (el && room) {
+        const rect = el.getBoundingClientRect();
+        const canvasWidth = rect.width;
+        const canvasHeight = rect.height;
+        const relX = e.clientX - rect.left;
+        const relY = e.clientY - rect.top;
+        setDragRoomPos({
+          x: (relX / canvasWidth) * room.width + room.originX,
+          y: (relY / canvasHeight) * room.height + room.originY,
+        });
+      } else {
+        setDragRoomPos(null);
+      }
+    },
+    [room],
+  );
+
+  const handleMouseUp = useCallback(() => {
+    if (dragState.draggedMarkerId && dragRoomPos) {
+      const [sid, mid] = dragState.draggedMarkerId.split('::');
+      if (sid && mid) {
+        updatePosition(sid, mid, { x: dragRoomPos.x, y: dragRoomPos.y });
+      }
+    }
+    setDragState({ isDragging: false, draggedMarkerId: null, startMouseX: 0, startMouseY: 0 });
+    setDragRoomPos(null);
+  }, [dragState.draggedMarkerId, dragRoomPos, updatePosition]);
+
   useEffect(() => {
     if (!dragState.isDragging) return;
-
-    const handleMouseMove = (e: MouseEvent) => {
-      setDragState((prev) => ({ ...prev, startMouseX: e.clientX, startMouseY: e.clientY }));
-    };
-
-    const handleMouseUp = () => {
-      setDragState({ isDragging: false, draggedMarkerId: null, startMouseX: 0, startMouseY: 0 });
-    };
 
     document.addEventListener('mousemove', handleMouseMove);
     document.addEventListener('mouseup', handleMouseUp);
@@ -137,18 +142,7 @@ function Canvas({
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragState.isDragging]);
-
-  // Compute current drag position in room coords
-  const dragRoomPos = useMemo(() => {
-    if (!dragState.isDragging || !containerRef.current || !room) return null;
-    return pxToRoom(
-      dragState.startMouseX,
-      dragState.startMouseY,
-      containerRef.current,
-      room,
-    );
-  }, [dragState.isDragging, dragState.startMouseX, dragState.startMouseY, room]);
+  }, [dragState.isDragging, handleMouseMove, handleMouseUp]);
 
   const handleAddSource = useCallback(() => {
     if (!selectedScenarioId || !room) return;
@@ -169,6 +163,14 @@ function Canvas({
     !!selectedScenario?.lockedSources.find((s) => s.id === id);
   const isLockedReceiver = (id: string) =>
     !!selectedScenario?.lockedReceivers.find((r) => r.id === id);
+
+  // Extract drag position outside render to avoid ref-in-render eslint error
+  let dragX: number | null = null;
+  let dragY: number | null = null;
+  if (dragState.isDragging && dragRoomPos) {
+    dragX = dragRoomPos.x;
+    dragY = dragRoomPos.y;
+  }
 
   if (!roomMapPreviewUrl && !room) {
     return (
@@ -220,7 +222,7 @@ function Canvas({
       <div ref={containerRef} className="relative w-full h-full">
         {/* Room map image */}
         {roomMapPreviewUrl && (
-          <img
+          <Image
             src={roomMapPreviewUrl}
             alt="Room map"
             className="absolute inset-0 w-full h-full object-contain"
@@ -255,10 +257,12 @@ function Canvas({
                 containerSize.width,
                 containerSize.height,
               );
+              const markerId = `${selectedScenarioId}::${source.id}`;
+              const isSelected = selectedMarkerId === markerId;
               return (
                 <div
                   key={source.id}
-                  className="absolute flex items-center justify-center rounded-full text-white font-bold select-none"
+                  className="absolute flex items-center justify-center rounded-full text-white font-bold select-none cursor-grab active:cursor-grabbing"
                   style={{
                     left: pos.left,
                     top: pos.top,
@@ -267,6 +271,11 @@ function Canvas({
                     transform: 'translate(-50%, -50%)',
                     backgroundColor: '#f59e0b',
                     fontSize: '16px',
+                    boxShadow: isSelected ? '0 0 0 2px white, 0 0 0 4px #f59e0b' : undefined,
+                  }}
+                  onMouseDown={handleMouseDown(source.id, selectedScenarioId!)}
+                  onClick={() => {
+                    setSelectedMarkerId(selectedMarkerId === markerId ? null : markerId);
                   }}
                 >
                   🔊
@@ -283,10 +292,12 @@ function Canvas({
                 containerSize.width,
                 containerSize.height,
               );
+              const markerId = `${selectedScenarioId}::${receiver.id}`;
+              const isSelected = selectedMarkerId === markerId;
               return (
                 <div
                   key={receiver.id}
-                  className="absolute flex items-center justify-center rounded-full text-white font-bold select-none"
+                  className="absolute flex items-center justify-center rounded-full text-white font-bold select-none cursor-grab active:cursor-grabbing"
                   style={{
                     left: pos.left,
                     top: pos.top,
@@ -295,6 +306,11 @@ function Canvas({
                     transform: 'translate(-50%, -50%)',
                     backgroundColor: '#3b82f6',
                     fontSize: '12px',
+                    boxShadow: isSelected ? '0 0 0 2px white, 0 0 0 4px #3b82f6' : undefined,
+                  }}
+                  onMouseDown={handleMouseDown(receiver.id, selectedScenarioId!)}
+                  onClick={() => {
+                    setSelectedMarkerId(selectedMarkerId === markerId ? null : markerId);
                   }}
                 >
                   R
@@ -306,21 +322,14 @@ function Canvas({
             {selectedScenario.sources.map((source) => {
               const isLocked = isLockedSource(source.id);
               if (isLocked) return null;
-              const pos = getMarkerCenterPx(
-                source.position.x,
-                source.position.y,
-                room,
-                containerSize.width,
-                containerSize.height,
-              );
               const markerId = `${selectedScenarioId}::${source.id}`;
               const isSelected = selectedMarkerId === markerId;
 
               let finalX = source.position.x;
               let finalY = source.position.y;
-              if (dragState.isDragging && dragState.draggedMarkerId === markerId && dragRoomPos) {
-                finalX = dragRoomPos.x;
-                finalY = dragRoomPos.y;
+              if (dragState.isDragging && dragState.draggedMarkerId === markerId && dragX !== null && dragY !== null) {
+                finalX = dragX;
+                finalY = dragY;
               }
               const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height);
 
@@ -338,11 +347,10 @@ function Canvas({
                     fontSize: '14px',
                     boxShadow: isSelected ? '0 0 0 2px white, 0 0 0 4px #f97316' : undefined,
                   }}
-                  onMouseDown={handleMouseDown(source.id, selectedScenarioId!, source.position.x, source.position.y)}
+                  onMouseDown={handleMouseDown(source.id, selectedScenarioId!)}
                   onClick={() => {
-                    if (!dragState.isDragging) {
-                      // Will be handled by the parent selection logic
-                    }
+                    console.log('CLICK source', markerId, 'current selected:', selectedMarkerId);
+                    setSelectedMarkerId(selectedMarkerId === markerId ? null : markerId);
                   }}
                 >
                   S
@@ -354,21 +362,14 @@ function Canvas({
             {selectedScenario.receivers.map((receiver) => {
               const isLocked = isLockedReceiver(receiver.id);
               if (isLocked) return null;
-              const pos = getMarkerCenterPx(
-                receiver.position.x,
-                receiver.position.y,
-                room,
-                containerSize.width,
-                containerSize.height,
-              );
               const markerId = `${selectedScenarioId}::${receiver.id}`;
               const isSelected = selectedMarkerId === markerId;
 
               let finalX = receiver.position.x;
               let finalY = receiver.position.y;
-              if (dragState.isDragging && dragState.draggedMarkerId === markerId && dragRoomPos) {
-                finalX = dragRoomPos.x;
-                finalY = dragRoomPos.y;
+              if (dragState.isDragging && dragState.draggedMarkerId === markerId && dragX !== null && dragY !== null) {
+                finalX = dragX;
+                finalY = dragY;
               }
               const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height);
 
@@ -386,7 +387,11 @@ function Canvas({
                     fontSize: '12px',
                     boxShadow: isSelected ? '0 0 0 2px white, 0 0 0 4px #3b82f6' : undefined,
                   }}
-                  onMouseDown={handleMouseDown(receiver.id, selectedScenarioId!, receiver.position.x, receiver.position.y)}
+                  onMouseDown={handleMouseDown(receiver.id, selectedScenarioId!)}
+                  onClick={() => {
+                    console.log('CLICK receiver', markerId, 'current selected:', selectedMarkerId);
+                    setSelectedMarkerId(selectedMarkerId === markerId ? null : markerId);
+                  }}
                 >
                   R
                 </div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { serializeConfigToXML } from '@/lib/xml-serializer';
 import type { ConfigModel, RoomConfig, InfoText, Position } from '@/lib/types';
 import { Button } from '@/components/common/Button';
@@ -27,15 +27,23 @@ interface EditorState {
   setRoom: (room: RoomConfig) => void;
   setInfo: (info: InfoText) => void;
   clearAll: () => void;
+  setSelectedScenarioId: (id: string | null) => void;
 }
 
 export default function Sidebar(props: EditorState) {
-  const { config, roomMapImage, roomMapPreviewUrl, selectedScenarioId, loadXML, loadRoomMap, exportFile, addScenario, deleteScenario, bulkLoad, setRoom, setInfo, clearAll, updateScenario: updateScenarioFn } = props;
+  const { config, roomMapImage, roomMapPreviewUrl, selectedScenarioId, loadXML, loadRoomMap, exportFile, addScenario, deleteScenario, bulkLoad, setRoom, setInfo, clearAll, updateScenario: updateScenarioFn, setSelectedScenarioId } = props;
   const xmlInputRef = useRef<HTMLInputElement>(null);
   const roomMapInputRef = useRef<HTMLInputElement>(null);
   const [bulkTarget, setBulkTarget] = useState<'sources' | 'receivers'>('sources');
   const [bulkText, setBulkText] = useState('');
-  const [room, setRoomState] = useState<Partial<RoomConfig>>({ width: 0, height: 0, originX: 0, originY: 0, originZ: 0 });
+  const [room, setRoomState] = useState<Partial<RoomConfig>>({});
+
+  // Reset room state when config changes (on XML load)
+  useEffect(() => {
+    if (config) {
+      setRoomState({});
+    }
+  }, [config]);
   const [infoData, setInfoData] = useState('');
 
   const handleXmlImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -208,7 +216,7 @@ export default function Sidebar(props: EditorState) {
               return (
                 <div
                   key={scenario.id}
-                  onClick={() => updateScenarioFn(scenario.id, {})}
+                  onClick={() => setSelectedScenarioId(scenario.id)}
                   className={`flex items-center gap-1.5 px-2 py-1.5 rounded cursor-pointer transition-colors ${isSelected ? 'bg-blue-50 dark:bg-blue-950' : 'hover:bg-gray-50 dark:hover:bg-zinc-800'}`}
                 >
                   <span className="text-xs text-zinc-700 dark:text-zinc-300 flex-1 truncate">{scenario.name}</span>
