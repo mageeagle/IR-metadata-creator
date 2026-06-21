@@ -96,14 +96,16 @@ interface Receiver {
 }
 
 // A scenario with a locked type and lists of sources/receivers
+// When locked='source' with multiple fixed sources (e.g., source_1..4),
+// each receiver gets N file paths forming a matrix (one per each source).
 interface Scenario {
   id: string; // unique identifier
   name: string;
   locked: 'source' | 'receiver' | 'none';
-  lockedSource?: Source;        // when locked = 'source'
-  lockedReceiver?: Receiver;    // when locked = 'receiver'
-  sources: Source[];            // moving sources
-  receivers: Receiver[];        // moving receivers
+  lockedSources: Source[];        // when locked = 'source' — can be 1 or more
+  lockedReceivers: Receiver[];    // when locked = 'receiver' — can be 1 or more
+  sources: Source[];              // moving sources (when locked = 'receiver')
+  receivers: Receiver[];          // moving receivers (when locked = 'source')
 }
 
 // The full config model
@@ -143,10 +145,24 @@ interface ConfigModel {
 ```
 - `locked` attribute → `Scenario.locked` (`'source'`, `'receiver'`, or missing/empty → `'none'`)
 - `name` attribute → `Scenario.name`
-- `<source>` at scenario root (single) → `Scenario.lockedSource` when locked = 'source'
-- `<receiver>` at scenario root (single) → `Scenario.lockedReceiver` when locked = 'receiver'
-- Multiple `<source>`, `<source_1>`–`<source_4>` under `<sources>` → `Scenario.sources[]`
-- `<receiver file_name_1="..." file_name_2="..." ...>` → each `file_name_N` maps to `fileNames[N-1]`
+
+**Single locked object (one fixed, rest moving):**
+- `<source>` at scenario root (single) → added to `Scenario.lockedSources[]` when locked = 'source'
+- `<receiver>` at scenario root (single) → added to `Scenario.lockedReceivers[]` when locked = 'receiver'
+
+**Multiple sources/receivers in a scenario (matrix pattern applies whenever N sources × M receivers):**
+- When there are multiple sources defined as `<source_1>`, `<source_2>`, ..., `<source_N>` → each maps to a separate entry in `Scenario.lockedSources[]` or `Scenario.sources[]` depending on context
+- When there are multiple receivers defined as `<receiver_1>`, `<receiver_2>`, ..., `<receiver_N>` → each maps to a separate entry in `Scenario.lockedReceivers[]` or `Scenario.receivers[]` depending on context
+- The matrix pattern (each receiver storing N file paths) triggers whenever the scenario has multiple sources AND multiple receivers simultaneously, regardless of locked state
+
+**File path matrix (multi-source × multi-receiver):**
+When a scenario has N sources and M receivers (both > 1), each receiver stores N file paths forming a matrix:
+- `<receiver file_name_1="rirs/01.wav" file_name_2="rirs/02.wav" ... file_name_N="rirs/N.wav" rcv_x="..." .../>`
+- Each `file_name_N` maps to `Receiver.fileNames[N-1]` — the IR from source N to this receiver
+- The number of `file_name_*` attributes equals the count of sources in that scenario (not just locked sources)
+
+**Single file path (one source, multiple receivers):**
+- `<receiver file_name="rirs/01.wav" .../>` → each receiver has exactly one file path (the IR from the single locked source to this receiver)
 
 #### Coordinate Attribute Naming
 | Type | X attribute | Y attribute | Z attribute |
@@ -214,6 +230,8 @@ The UI always shows `X`, `Y`, `Z` regardless of the XML attribute name. The seri
 - "Add Channel" button appends a new empty file path input
 - Each input has a remove button
 - Stores values as `string[]` in the model
+- When a scenario has N sources and M receivers (both > 1), each receiver gets exactly N channels (auto-sized on scenario load or when source count changes)
+- Adding/removing sources in any scenario with multiple sources updates all receivers' channel counts to match
 
 ---
 
@@ -238,9 +256,9 @@ interface EditorState {
 - `ADD_SCENARIO()` — create new empty scenario with generated ID
 - `DELETE_SCENARIO(id)` — remove scenario
 - `UPDATE_SCENARIO(id, updates)` — update scenario fields
-- `ADD_SOURCE(scenarioId, source)` — add to scenario.sources or lockedSource
+- `ADD_SOURCE(scenarioId, source)` — add to scenario.sources[] or lockedSources[]
 - `REMOVE_SOURCE(scenarioId, sourceId)` — remove from sources array
-- `ADD_RECEIVER(scenarioId, receiver)` — add to scenario.receivers or lockedReceiver
+- `ADD_RECEIVER(scenarioId, receiver)` — add to scenario.receivers[] or lockedReceivers[]
 - `REMOVE_RECEIVER(scenarioId, receiverId)` — remove from receivers array
 - `UPDATE_POSITION(id, positionData)` — update a source or receiver's position
 - `UPDATE_FILE_PATHS(receiverId, fileNames)` — update multi-channel file paths
@@ -275,8 +293,10 @@ interface EditorState {
 1. User clicks "Export XML" button (in sidebar or as a floating action button).
 2. Serialize the current config state back to XML using `fast-xml-parser`.
 3. Map UI field names back to XML attribute names:
-   - Position.x → src_x (sources) or rcv_x (receivers)
-   - fileNames[0] → file_name_1, etc.
+    - Position.x → src_x (sources) or rcv_x (receivers)
+    - fileNames[0] → file_name_1, etc.
+    - When a receiver has N file paths, each becomes file_name_1 through file_name_N
+- When a scenario has multiple sources or receivers, serialize each as <source_1>/<source_2>/... or <receiver_1>/<receiver_2>/... (use <source>/<receiver> without suffix only for single objects)
 4. Create a Blob with the XML string, generate object URL, trigger download as `config.xml`.
 5. On success: show confirmation toast/message in sidebar.
 
