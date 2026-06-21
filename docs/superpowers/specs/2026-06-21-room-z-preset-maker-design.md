@@ -146,17 +146,27 @@ interface ConfigModel {
 - `locked` attribute → `Scenario.locked` (`'source'`, `'receiver'`, or missing/empty → `'none'`)
 - `name` attribute → `Scenario.name`
 
-**Single locked object (one fixed, rest moving):**
-- `<source>` at scenario root (single) → added to `Scenario.lockedSources[]` when locked = 'source'
-- `<receiver>` at scenario root (single) → added to `Scenario.lockedReceivers[]` when locked = 'receiver'
+**Single object (one fixed, rest moving):**
+- `<source>` at scenario root (single element) → added to `Scenario.sources[]` or `Scenario.lockedSources[]` depending on context
+- `<receiver>` at scenario root (single element) → added to `Scenario.receivers[]` or `Scenario.lockedReceivers[]` depending on context
 
-**Multiple sources/receivers in a scenario (matrix pattern applies whenever N sources × M receivers):**
-- When there are multiple sources defined as `<source_1>`, `<source_2>`, ..., `<source_N>` → each maps to a separate entry in `Scenario.lockedSources[]` or `Scenario.sources[]` depending on context
-- When there are multiple receivers defined as `<receiver_1>`, `<receiver_2>`, ..., `<receiver_N>` → each maps to a separate entry in `Scenario.lockedReceivers[]` or `Scenario.receivers[]` depending on context
-- The matrix pattern (each receiver storing N file paths) triggers whenever the scenario has multiple sources AND multiple receivers simultaneously, regardless of locked state
+**Multiple sources:** each gets a numbered suffix as siblings at the scenario root level:
+- `<source_1>`, `<source_2>`, ..., `<source_N>` → each maps to a separate entry in `Scenario.sources[]` or `Scenario.lockedSources[]`
+- Sources are NEVER wrapped in a `<sources>` parent when there are multiple
+- A single source uses `<source>` (no suffix)
 
-**File path matrix (multi-source × multi-receiver):**
-When a scenario has N sources and M receivers (both > 1), each receiver stores N file paths forming a matrix:
+**Multiple receivers:** all are wrapped in a single `<receivers>` parent, each `<receiver>` keeps its own attributes:
+- `<receivers><receiver .../><receiver .../>...</receivers>` → each `<receiver>` maps to a separate entry in `Scenario.receivers[]` or `Scenario.lockedReceivers[]`
+- There is NO `<receiver_1>`, `<receiver_2>` etc. — receivers are never individually numbered
+- A single receiver uses `<receiver>` (no suffix, no parent wrapper needed)
+
+**File paths on receivers:**
+- When there is exactly 1 source and M receivers: each `<receiver>` gets `file_name="path"` (singular, unnumbered) — one IR per receiver
+- When there are N sources (N > 1) and M receivers: each `<receiver>` gets `file_name_1`, `file_name_2`, ..., `file_name_N` (one per source) — each receiver stores the IR from every source to that receiver position, forming a matrix
+- The number of `file_name_*` attributes on each receiver always equals the count of sources in that scenario
+
+**File path matrix (whenever there are multiple sources):**
+When a scenario has N sources (N > 1), each `<receiver>` stores N file paths forming a matrix:
 - `<receiver file_name_1="rirs/01.wav" file_name_2="rirs/02.wav" ... file_name_N="rirs/N.wav" rcv_x="..." .../>`
 - Each `file_name_N` maps to `Receiver.fileNames[N-1]` — the IR from source N to this receiver
 - The number of `file_name_*` attributes equals the count of sources in that scenario (not just locked sources)
@@ -296,7 +306,9 @@ interface EditorState {
     - Position.x → src_x (sources) or rcv_x (receivers)
     - fileNames[0] → file_name_1, etc.
     - When a receiver has N file paths, each becomes file_name_1 through file_name_N
-- When a scenario has multiple sources or receivers, serialize each as <source_1>/<source_2>/... or <receiver_1>/<receiver_2>/... (use <source>/<receiver> without suffix only for single objects)
+- Sources: use <source> (no suffix) for a single source; use <source_1>, <source_2>, ... for multiple sources (siblings at scenario root, NOT wrapped in <sources>)
+- Receivers: use <receiver> (no suffix) for a single receiver; wrap multiple receivers in a <receivers> parent with each <receiver> as a child (NO <receiver_1>, <receiver_2> etc.)
+- File paths on each receiver: use file_name="path" when there is one source; use file_name_1 through file_name_N when there are N sources
 4. Create a Blob with the XML string, generate object URL, trigger download as `config.xml`.
 5. On success: show confirmation toast/message in sidebar.
 
