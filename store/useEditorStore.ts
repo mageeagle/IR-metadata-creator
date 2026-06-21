@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import type { ConfigModel, Source, Receiver, Position, BulkLoadTarget, RoomConfig } from '../lib/types';
+import { parseConfigXML } from '../lib/xml-parser';
+import { serializeConfigToXML } from '../lib/xml-serializer';
 
 const STORAGE_KEY = 'room-z-preset-maker';
 
@@ -50,12 +52,69 @@ export function useEditorStore() {
   }, []);
 
   const loadXML = useCallback((xmlString: string) => {
-    setState(prev => ({ ...prev, config: createEmptyConfig() }));
+    try {
+      const parsed = parseConfigXML(xmlString);
+
+      const config: ConfigModel = {
+        room: { width: parsed.room.width, height: parsed.room.height, originX: parsed.room.originX, originY: parsed.room.originY, originZ: parsed.room.originZ },
+        info: { data: parsed.info.data ?? '' },
+        scenarios: parsed.scenarios.map((sc) => {
+          const lockedSources: Source[] = (sc.lockedSources || []).map((s) => ({
+            id: generateId(),
+            isLocked: true,
+            position: { x: (s.src_x as number) ?? 0, y: (s.src_y as number) ?? 0, z: (s.src_z as number) ?? 0, rotX: (s.rot_x as number) ?? 0, rotY: (s.rot_y as number) ?? 0, rotZ: (s.rot_z as number) ?? 0 },
+          }));
+
+          const lockedReceivers: Receiver[] = ((sc.lockedReceiver ? [sc.lockedReceiver] : []) as Array<Record<string, number>>).map((r) => ({
+            id: generateId(),
+            isLocked: true,
+            fileNames: [],
+            position: { x: (r.rcv_x as number) ?? 0, y: (r.rcv_y as number) ?? 0, z: (r.rcv_z as number) ?? 0, rotX: (r.rot_x as number) ?? 0, rotY: (r.rot_y as number) ?? 0, rotZ: (r.rot_z as number) ?? 0 },
+          }));
+
+          const sources: Source[] = (sc.sources || []).map((s) => ({
+            id: generateId(),
+            filePath: typeof s.file_name === 'string' ? s.file_name : undefined,
+            position: { x: (s.src_x as number) ?? 0, y: (s.src_y as number) ?? 0, z: (s.src_z as number) ?? 0, rotX: (s.rot_x as number) ?? 0, rotY: (s.rot_y as number) ?? 0, rotZ: (s.rot_z as number) ?? 0 },
+          }));
+
+          const receivers: Receiver[] = (sc.receivers || []).map((r) => ({
+            id: generateId(),
+            fileNames: Array.isArray(r.file_name) ? r.file_name : ([r.file_name] as string[]),
+            position: { x: (r.rcv_x as number) ?? 0, y: (r.rcv_y as number) ?? 0, z: (r.rcv_z as number) ?? 0, rotX: (r.rot_x as number) ?? 0, rotY: (r.rot_y as number) ?? 0, rotZ: (r.rot_z as number) ?? 0 },
+          }));
+
+          return {
+            id: generateId(),
+            name: sc.name || '',
+            locked: sc.locked || 'none',
+            lockedSources,
+            lockedReceivers,
+            sources,
+            receivers,
+          };
+        }),
+      };
+
+      setState(prev => ({ ...prev, config }));
+    } catch (err) {
+      console.error('Failed to parse XML:', err);
+      setState(prev => ({ ...prev, config: createEmptyConfig() }));
+    }
   }, []);
 
   const exportFile = useCallback(() => {
-    if (!state.config) return null;
-    return null;
+    if (!state.config) return;
+    const xmlString = serializeConfigToXML(state.config);
+    const blob = new Blob([xmlString], { type: 'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'room-z-preset.xml';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
   }, [state.config]);
 
   const addScenario = useCallback((name?: string) => {
