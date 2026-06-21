@@ -2,7 +2,7 @@
 
 import { useRef, useState, useCallback } from 'react';
 import { serializeConfigToXML } from '@/lib/xml-serializer';
-import type { ConfigModel, RoomConfig, InfoText } from '@/lib/types';
+import type { ConfigModel, RoomConfig, InfoText, Position } from '@/lib/types';
 import { Button } from '@/components/common/Button';
 
 interface EditorState {
@@ -16,14 +16,14 @@ interface EditorState {
   addScenario: (name?: string) => void;
   deleteScenario: (id: string) => void;
   updateScenario: (id: string, updates: { name?: string; locked?: 'source' | 'receiver' | 'none' }) => void;
-  addSource: (scenarioId: string, position?: unknown) => void;
+  addSource: (scenarioId: string, position?: Partial<Position>) => void;
   removeSource: (scenarioId: string, sourceId: string) => void;
-  addReceiver: (scenarioId: string, position?: unknown, fileNames?: string[]) => void;
+  addReceiver: (scenarioId: string, position?: Partial<Position>, fileNames?: string[]) => void;
   removeReceiver: (scenarioId: string, receiverId: string) => void;
-  updatePosition: (scenarioId: string, markerId: string, positionData: unknown) => void;
+  updatePosition: (scenarioId: string, markerId: string, positionData: Partial<Position>) => void;
   updateFilePaths: (scenarioId: string, receiverId: string, fileNames: string[]) => void;
   loadRoomMap: (file: File) => void;
-  bulkLoad: (scenarioId: string, target: string, lines: Array<{ x: number; y: number; z: number; rotX: number; rotY: number; rotZ: number }>) => void;
+  bulkLoad: (scenarioId: string, target: 'sources' | 'receivers', lines: Array<{ x: number; y: number; z: number; rotX: number; rotY: number; rotZ: number }>) => void;
   setRoom: (room: RoomConfig) => void;
   setInfo: (info: InfoText) => void;
   clearAll: () => void;
@@ -33,7 +33,7 @@ export default function Sidebar(props: EditorState) {
   const { config, roomMapImage, roomMapPreviewUrl, selectedScenarioId, loadXML, loadRoomMap, exportFile, addScenario, deleteScenario, bulkLoad, setRoom, setInfo, clearAll, updateScenario: updateScenarioFn } = props;
   const xmlInputRef = useRef<HTMLInputElement>(null);
   const roomMapInputRef = useRef<HTMLInputElement>(null);
-  const [bulkTarget, setBulkTarget] = useState('sources');
+  const [bulkTarget, setBulkTarget] = useState<'sources' | 'receivers'>('sources');
   const [bulkText, setBulkText] = useState('');
   const [room, setRoomState] = useState<Partial<RoomConfig>>({ width: 0, height: 0, originX: 0, originY: 0, originZ: 0 });
   const [infoData, setInfoData] = useState('');
@@ -181,7 +181,7 @@ export default function Sidebar(props: EditorState) {
         <>
           <div className="px-4 pt-3"><h3 className="text-[10px] font-medium tracking-wider uppercase text-gray-500 dark:text-gray-400">Bulk Load</h3></div>
           <div className="px-4 pb-2 space-y-1.5">
-            <select value={bulkTarget} onChange={(e) => setBulkTarget(e.target.value)} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
+              <select value={bulkTarget} onChange={(e) => setBulkTarget(e.target.value as 'sources' | 'receivers')} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500">
               <option value="sources">Sources</option>
               <option value="receivers">Receivers</option>
             </select>
