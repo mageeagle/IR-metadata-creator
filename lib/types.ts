@@ -9,6 +9,7 @@ export interface Position {
 
 export interface RoomConfig {
   width: number;
+  depth: number;
   height: number;
   originX: number;
   originY: number;

@@ -3,6 +3,7 @@ import { XMLParser } from 'fast-xml-parser';
 export interface ParsedConfig {
   room: {
     width: number;
+    depth: number;
     height: number;
     originX: number;
     originY: number;
@@ -67,7 +68,8 @@ export function parseConfigXML(xmlString: string): ParsedConfig {
   const roomEl = (Array.isArray(roomItems) ? roomItems[0] : roomItems) || {};
   const room = {
     width: getNum(roomEl, '_width'),
-    height: getNum(roomEl, '_height'),
+    depth: getNum(roomEl, '_height'),
+    height: 0,
     originX: getNum(roomEl, '_origin_x'),
     originY: getNum(roomEl, '_origin_y'),
     originZ: getNum(roomEl, '_origin_z'),

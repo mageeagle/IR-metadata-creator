@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useCallback, useEffect, useRef } from 'react';
-import Image from 'next/image';
+
 import type { ConfigModel, RoomConfig, Position } from '@/lib/types';
 
 type CanvasMode = 'roomz' | 'normal';
@@ -44,6 +44,16 @@ interface EditorState {
   toggleCanvasMode: () => void;
 }
 
+function getPixelsPerMeter(room: RoomConfig | undefined, imgNaturalWidth: number, imgNaturalHeight: number): { pxPerMeterX: number; pxPerMeterY: number } {
+  if (!room || !isFinite(room.width) || !isFinite(room.depth) || room.width <= 0 || room.depth <= 0) {
+    return { pxPerMeterX: 0, pxPerMeterY: 0 };
+  }
+  return {
+    pxPerMeterX: imgNaturalWidth / room.width,
+    pxPerMeterY: imgNaturalHeight / room.depth,
+  };
+}
+
 function getMarkerCenterPx(
   markerX: number,
   markerY: number,
@@ -51,16 +61,19 @@ function getMarkerCenterPx(
   canvasWidth: number,
   canvasHeight: number,
   canvasMode: CanvasMode,
+  pxPerMeter: { pxPerMeterX: number; pxPerMeterY: number } | null,
 ): { left: string; top: string } {
-  if (!room || canvasWidth === 0 || canvasHeight === 0 || !isFinite(room.width) || !isFinite(room.height) || room.width <= 0 || room.height <= 0) {
+  if (!room || !pxPerMeter || pxPerMeter.pxPerMeterX === 0 || pxPerMeter.pxPerMeterY === 0) {
     return { left: '0%', top: '0%' };
   }
   const effectiveOriginX = canvasMode === 'roomz' ? room.originX + room.width / 2 : room.originX;
-  const effectiveOriginY = canvasMode === 'roomz' ? room.originY + room.height / 2 : room.originY;
-  const pixelsPerX = canvasWidth / room.width;
-  const pixelsPerY = canvasHeight / room.height;
-  const px = (markerX - effectiveOriginX) * pixelsPerX + canvasWidth / 2;
-  const py = -(markerY - effectiveOriginY) * pixelsPerY + canvasHeight / 2;
+  const effectiveOriginY = canvasMode === 'roomz' ? room.originY + room.depth / 2 : room.originY;
+  const imgWidth = room.width * pxPerMeter.pxPerMeterX;
+  const imgHeight = room.depth * pxPerMeter.pxPerMeterY;
+  const imgOffsetX = (canvasWidth - imgWidth) / 2;
+  const imgOffsetY = (canvasHeight - imgHeight) / 2;
+  const px = (markerX - effectiveOriginX) * pxPerMeter.pxPerMeterX + imgWidth / 2 + imgOffsetX;
+  const py = -(markerY - effectiveOriginY) * pxPerMeter.pxPerMeterY + imgHeight / 2 + imgOffsetY;
   return {
     left: `${(px / canvasWidth) * 100}%`,
     top: `${(py / canvasHeight) * 100}%`,
@@ -86,12 +99,19 @@ function Canvas({
 }: EditorState) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+  const [imgNaturalSize, setImgNaturalSize] = useState<{ width: number; height: number } | null>(null);
+  const [scaleMode, setScaleMode] = useState<'off' | 'firstPoint' | 'secondPoint' | 'done'>('off');
+  const [scalePoint1, setScalePoint1] = useState<{ x: number; y: number } | null>(null);
+  const [scalePoint2, setScalePoint2] = useState<{ x: number; y: number } | null>(null);
+  const [knownDistance, setKnownDistance] = useState<string>('');
+  const [scaleFactor, setScaleFactor] = useState<number | null>(null);
   const didDrag = useRef(false);
   const dragRef = useRef<{ isDragging: boolean; draggedMarkerId: string | null; startMouseX: number; startMouseY: number; isLocked: boolean } | null>(null);
   const dragRoomRef = useRef<{ x: number; y: number } | null>(null);
   const mouseUpRef = useRef<(() => void) | null>(null);
 
   const room = config?.room;
+  const pxPerMeter = scaleFactor ? { pxPerMeterX: scaleFactor, pxPerMeterY: scaleFactor } : getPixelsPerMeter(room, imgNaturalSize?.width ?? 0, imgNaturalSize?.height ?? 0);
 
   // Measure container size
   useEffect(() => {
@@ -119,20 +139,22 @@ function Canvas({
       drag.startMouseY = e.clientY;
       setDragState(drag);
       const el = containerRef.current;
-      if (el && room && room.width > 0 && room.height > 0 && isFinite(room.width) && isFinite(room.height)) {
+      if (el && room && room.width > 0 && room.depth > 0 && isFinite(room.width) && isFinite(room.depth)) {
         const rect = el.getBoundingClientRect();
         const canvasWidth = rect.width;
         const canvasHeight = rect.height;
         if (canvasWidth > 0 && canvasHeight > 0) {
           const relX = e.clientX - rect.left;
           const relY = e.clientY - rect.top;
-          const pixelsPerX = canvasWidth / room.width;
-          const pixelsPerY = canvasHeight / room.height;
-          const px = relX - canvasWidth / 2;
-          const py = relY - canvasHeight / 2;
+          const imgWidth = room.width * pxPerMeter.pxPerMeterX;
+          const imgHeight = room.depth * pxPerMeter.pxPerMeterY;
+          const imgOffsetX = (canvasWidth - imgWidth) / 2;
+          const imgOffsetY = (canvasHeight - imgHeight) / 2;
+          const px = relX - imgWidth / 2 - imgOffsetX;
+          const py = relY - imgHeight / 2 - imgOffsetY;
           const effectiveOriginX = canvasMode === 'roomz' ? room.originX + room.width / 2 : room.originX;
-          const effectiveOriginY = canvasMode === 'roomz' ? room.originY + room.height / 2 : room.originY;
-          const roomPos = { x: px / pixelsPerX + effectiveOriginX, y: -py / pixelsPerY + effectiveOriginY };
+          const effectiveOriginY = canvasMode === 'roomz' ? room.originY + room.depth / 2 : room.originY;
+          const roomPos = { x: px / pxPerMeter.pxPerMeterX + effectiveOriginX, y: -py / pxPerMeter.pxPerMeterY + effectiveOriginY };
           dragRoomRef.current = roomPos;
           setDragRoomPos(roomPos);
         } else {
@@ -144,7 +166,7 @@ function Canvas({
         setDragRoomPos(null);
       }
     },
-    [room, setDragState, setDragRoomPos],
+    [room, setDragState, setDragRoomPos, pxPerMeter],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -203,14 +225,14 @@ function Canvas({
   const handleAddSource = useCallback(() => {
     if (!selectedScenarioId || !room) return;
     const centerX = room.originX + room.width / 2;
-    const centerY = room.originY + room.height / 2;
+    const centerY = room.originY + room.depth / 2;
     addSource(selectedScenarioId, { x: centerX, y: centerY, z: 0, rotX: 0, rotY: 0, rotZ: 0 });
   }, [selectedScenarioId, room, addSource]);
 
   const handleAddReceiver = useCallback(() => {
     if (!selectedScenarioId || !room) return;
     const centerX = room.originX + room.width / 2;
-    const centerY = room.originY + room.height / 2;
+    const centerY = room.originY + room.depth / 2;
     addReceiver(selectedScenarioId, { x: centerX, y: centerY, z: 0, rotX: 0, rotY: 0, rotZ: 0 });
   }, [selectedScenarioId, room, addReceiver]);
 
@@ -252,6 +274,18 @@ function Canvas({
       {selectedScenarioId && (roomMapPreviewUrl || room) && (
         <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex gap-1.5 items-center">
           <button
+            onClick={() => {
+              setScaleMode('firstPoint');
+              setScalePoint1(null);
+              setScalePoint2(null);
+              setKnownDistance('');
+              setScaleFactor(null);
+            }}
+            className="px-2.5 py-1 bg-green-600 text-white text-xs font-medium rounded shadow hover:bg-green-700 transition-colors"
+          >
+            Set Scale
+          </button>
+          <button
             onClick={handleAddSource}
             disabled={!room}
             className="px-2.5 py-1 bg-orange-500 text-white text-xs font-medium rounded shadow hover:bg-orange-600 transition-colors disabled:opacity-40"
@@ -279,15 +313,123 @@ function Canvas({
         </div>
       )}
 
+      {/* Scale mode UI */}
+      {scaleMode !== 'off' && (
+        <div className="absolute top-12 left-1/2 -translate-x-1/2 z-30 bg-zinc-800 border border-zinc-600 rounded-lg px-4 py-2 shadow-xl">
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-300">
+              {scaleMode === 'firstPoint' ? 'Click first point' : scaleMode === 'secondPoint' ? 'Click second point' : 'Click to reset'}
+            </span>
+            {scalePoint1 && scalePoint2 && scaleMode === 'secondPoint' && (
+              <span className="text-xs text-zinc-400">
+                ({Math.round(Math.sqrt(Math.pow(scalePoint2.x - scalePoint1.x, 2) + Math.pow(scalePoint2.y - scalePoint1.y, 2)))}px)
+              </span>
+            )}
+            {scaleMode === 'done' && (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="number"
+                  value={knownDistance}
+                  onChange={(e) => setKnownDistance(e.target.value)}
+                  placeholder="Distance in meters"
+                  className="w-20 px-1.5 py-0.5 bg-zinc-700 border border-zinc-500 rounded text-xs text-white placeholder-zinc-500"
+                />
+                <button
+                  onClick={() => {
+                    const dist = parseFloat(knownDistance);
+                    if (dist > 0 && scalePoint1 && scalePoint2) {
+                      const pixelDist = Math.sqrt(Math.pow(scalePoint2.x - scalePoint1.x, 2) + Math.pow(scalePoint2.y - scalePoint1.y, 2));
+                      setScaleFactor(pixelDist / dist);
+                      setScaleMode('done');
+                    }
+                  }}
+                  className="px-1.5 py-0.5 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                >
+                  Apply
+                </button>
+                <button
+                  onClick={() => setScaleMode('secondPoint')}
+                  className="px-1.5 py-0.5 bg-zinc-600 text-white text-xs rounded hover:bg-zinc-700"
+                >
+                  Reset
+                </button>
+                <button
+                  onClick={() => {
+                    setScaleMode('off');
+                    setScalePoint1(null);
+                    setScalePoint2(null);
+                  }}
+                  className="px-1.5 py-0.5 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                >
+                  Done
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Canvas container */}
-      <div ref={containerRef} className="relative w-full h-full" onClick={() => setSelectedMarkerId(null)}>
+      <div ref={containerRef} className="relative w-full h-full" onClick={(e) => {
+        if (scaleMode === 'firstPoint') {
+          const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+          setScalePoint1({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+          setScaleMode('secondPoint');
+        } else if (scaleMode === 'secondPoint') {
+          const rect = (e.currentTarget as HTMLDivElement).getBoundingClientRect();
+          setScalePoint2({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+          setScaleMode('done');
+        } else {
+          setSelectedMarkerId(null);
+        }
+      }}>
         {/* Room map image */}
         {roomMapPreviewUrl && (
-          <Image
-            src={roomMapPreviewUrl}
-            alt="Room map"
-            className="absolute inset-0 w-full h-full object-contain"
-          />
+          <div className="absolute inset-0 w-full h-full" style={{ pointerEvents: scaleMode !== 'off' ? 'none' : 'auto' }}>
+            <img
+              src={roomMapPreviewUrl}
+              alt="Room map"
+              className="absolute inset-0 w-full h-full object-contain"
+              onClick={(e) => e.stopPropagation()}
+              onLoad={(e) => {
+                const img = e.currentTarget;
+                setImgNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
+              }}
+            />
+            {scalePoint1 && (
+              <div
+                className="absolute w-4 h-4 rounded-full bg-red-500 border-2 border-white pointer-events-none"
+                style={{
+                  left: `${(scalePoint1.x / containerSize.width) * 100}%`,
+                  top: `${(scalePoint1.y / containerSize.height) * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              />
+            )}
+            {scalePoint2 && (
+              <div
+                className="absolute w-4 h-4 rounded-full bg-blue-500 border-2 border-white pointer-events-none"
+                style={{
+                  left: `${(scalePoint2.x / containerSize.width) * 100}%`,
+                  top: `${(scalePoint2.y / containerSize.height) * 100}%`,
+                  transform: 'translate(-50%, -50%)',
+                }}
+              />
+            )}
+            {scalePoint1 && scalePoint2 && (
+              <svg className="absolute inset-0 w-full h-full pointer-events-none">
+                <line
+                  x1={`${(scalePoint1.x / containerSize.width) * 100}%`}
+                  y1={`${(scalePoint1.y / containerSize.height) * 100}%`}
+                  x2={`${(scalePoint2.x / containerSize.width) * 100}%`}
+                  y2={`${(scalePoint2.y / containerSize.height) * 100}%`}
+                  stroke="white"
+                  strokeWidth="2"
+                  strokeDasharray="4,4"
+                />
+              </svg>
+            )}
+          </div>
         )}
 
         {/* Grid overlay */}
@@ -312,13 +454,14 @@ function Canvas({
             {/* Locked sources */}
             {selectedScenario.lockedSources.map((source, idx) => {
               const pos = getMarkerCenterPx(
-                source.position.x,
-                source.position.y,
-                room,
-                containerSize.width,
-                containerSize.height,
-                canvasMode,
-              );
+                 source.position.x,
+                 source.position.y,
+                 room,
+                 containerSize.width,
+                 containerSize.height,
+                 canvasMode,
+                 pxPerMeter,
+               );
               const markerId = `${selectedScenarioId}::${source.id}`;
               const isSelected = selectedMarkerId === markerId;
 
@@ -328,7 +471,7 @@ function Canvas({
                 finalX = dragRoomRef.current.x;
                 finalY = dragRoomRef.current.y;
               }
-              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode);
+              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode, pxPerMeter);
 
               return (
                 <div
@@ -358,7 +501,7 @@ function Canvas({
             })}
 
             {/* Locked receivers */}
-            {selectedScenario.lockedReceivers.map((receiver, idx) => {
+           {selectedScenario.lockedReceivers.map((receiver, idx) => {
               const pos = getMarkerCenterPx(
                 receiver.position.x,
                 receiver.position.y,
@@ -366,6 +509,7 @@ function Canvas({
                 containerSize.width,
                 containerSize.height,
                 canvasMode,
+                pxPerMeter,
               );
               const markerId = `${selectedScenarioId}::${receiver.id}`;
               const isSelected = selectedMarkerId === markerId;
@@ -376,7 +520,7 @@ function Canvas({
                 finalX = dragRoomRef.current.x;
                 finalY = dragRoomRef.current.y;
               }
-              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode);
+              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode, pxPerMeter);
 
               return (
                 <div
@@ -406,7 +550,7 @@ function Canvas({
             })}
 
             {/* Sources */}
-            {selectedScenario.sources.map((source, idx) => {
+          {selectedScenario.sources.map((source, idx) => {
               const markerId = `${selectedScenarioId}::${source.id}`;
               const isSelected = selectedMarkerId === markerId;
 
@@ -416,7 +560,7 @@ function Canvas({
                 finalX = dragRoomRef.current.x;
                 finalY = dragRoomRef.current.y;
               }
-              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode);
+              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode, pxPerMeter);
 
               return (
                 <div
@@ -446,7 +590,7 @@ function Canvas({
             })}
 
             {/* Receivers */}
-            {selectedScenario.receivers.map((receiver, idx) => {
+          {selectedScenario.receivers.map((receiver, idx) => {
               const markerId = `${selectedScenarioId}::${receiver.id}`;
               const isSelected = selectedMarkerId === markerId;
 
@@ -456,7 +600,7 @@ function Canvas({
                 finalX = dragRoomRef.current.x;
                 finalY = dragRoomRef.current.y;
               }
-              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode);
+              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode, pxPerMeter);
 
               return (
                 <div

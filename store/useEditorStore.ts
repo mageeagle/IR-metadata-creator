@@ -29,7 +29,7 @@ interface EditorState {
 
 function createEmptyConfig(): ConfigModel {
   return {
-    room: { width: 4, height: 4, originX: 0, originY: 0, originZ: 0 },
+    room: { width: 4, depth: 4, height: 4, originX: 0, originY: 0, originZ: 0 },
     info: { data: '' },
     scenarios: [],
   };
@@ -66,7 +66,7 @@ export function useEditorStore() {
       const parsed = parseConfigXML(xmlString);
 
       const config: ConfigModel = {
-        room: { width: parsed.room.width, height: parsed.room.height, originX: parsed.room.originX, originY: parsed.room.originY, originZ: parsed.room.originZ },
+        room: { width: parsed.room.width, depth: parsed.room.depth, height: parsed.room.height, originX: parsed.room.originX, originY: parsed.room.originY, originZ: parsed.room.originZ },
         info: { data: parsed.info.data ?? '' },
         scenarios: parsed.scenarios.map((sc) => {
           const lockedSourcesArr: Array<Record<string, number>> = (sc.lockedSources as Array<Record<string, number>>) ?? [];
@@ -332,8 +332,14 @@ export function useEditorStore() {
   }, []);
 
   const loadRoomMap = useCallback((file: File) => {
-    const url = URL.createObjectURL(file);
-    setState(prev => ({ ...prev, roomMapImage: file, roomMapPreviewUrl: url }));
+    setState(prev => {
+      if (file.size === 0) {
+        if (prev.roomMapPreviewUrl) URL.revokeObjectURL(prev.roomMapPreviewUrl);
+        return { ...prev, roomMapImage: null, roomMapPreviewUrl: null };
+      }
+      const url = URL.createObjectURL(file);
+      return { ...prev, roomMapImage: file, roomMapPreviewUrl: url };
+    });
   }, []);
 
   const bulkLoad = useCallback((scenarioId: string, target: BulkLoadTarget, lines: Array<{ x: number; y: number; z: number; rotX: number; rotY: number; rotZ: number }>) => {

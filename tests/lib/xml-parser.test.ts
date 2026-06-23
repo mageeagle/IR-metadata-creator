@@ -7,7 +7,8 @@ describe('parseConfigXML - room', () => {
     const result = parseConfigXML(xml);
     expect(result.room).toEqual({
       width: 4,
-      height: 4,
+      depth: 4,
+      height: 0,
       originX: 0,
       originY: 0,
       originZ: 0,
@@ -19,7 +20,8 @@ describe('parseConfigXML - room', () => {
     const result = parseConfigXML(xml);
     expect(result.room).toEqual({
       width: 10,
-      height: 5,
+      depth: 5,
+      height: 0,
       originX: 2.5,
       originY: -1,
       originZ: 1.5,

@@ -37,6 +37,16 @@ export default function Sidebar(props: EditorState) {
   const [bulkTarget, setBulkTarget] = useState<'sources' | 'receivers'>('sources');
   const [bulkText, setBulkText] = useState('');
   const [room, setRoomState] = useState<Partial<RoomConfig>>({});
+  const [localRoomMapPreviewUrl, setLocalRoomMapPreviewUrl] = useState<string | null>(roomMapPreviewUrl);
+  const [localRoomMapImage, setLocalRoomMapImage] = useState<File | null>(roomMapImage);
+
+  // Sync local state with store
+  useEffect(() => {
+    setLocalRoomMapPreviewUrl(roomMapPreviewUrl);
+  }, [roomMapPreviewUrl]);
+  useEffect(() => {
+    setLocalRoomMapImage(roomMapImage);
+  }, [roomMapImage]);
 
   // Reset room state when config changes (on XML load)
   useEffect(() => {
@@ -108,8 +118,7 @@ export default function Sidebar(props: EditorState) {
 
   const handleRemoveRoomMap = useCallback(() => {
     props.loadRoomMap(new File([''], '', { type: 'image/png' }));
-    URL.revokeObjectURL(roomMapPreviewUrl || '');
-  }, [props.loadRoomMap, roomMapPreviewUrl]);
+  }, [props.loadRoomMap]);
 
   return (
     <aside className="w-[340px] min-w-[340px] max-w-[340px] border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-y-auto">
@@ -134,6 +143,15 @@ export default function Sidebar(props: EditorState) {
       <div className="px-4 pb-2">
         <div
           onClick={() => roomMapInputRef.current?.click()}
+          onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+          onDrop={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            const file = e.dataTransfer?.files[0];
+            if (file && /\.(jpg|jpeg|png|webp)$/i.test(file.name)) {
+              handleRoomMapChange({ target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>);
+            }
+          }}
           className="border-2 border-dashed border-gray-300 dark:border-gray-600 rounded p-3 text-center cursor-pointer hover:border-blue-400 dark:hover:border-blue-500 transition-colors"
         >
           <input
@@ -143,14 +161,14 @@ export default function Sidebar(props: EditorState) {
             onChange={handleRoomMapChange}
             className="hidden"
           />
-          {roomMapPreviewUrl ? (
-            <div className="relative">
-              <img src={roomMapPreviewUrl} alt="Room map" className="w-full h-auto rounded" />
+          {localRoomMapPreviewUrl ? (
+            <div className="flex justify-between items-center">
+              <p className="text-xs text-green-500 text-center flex-1">Image loaded on canvas</p>
               <button
                 onClick={(e) => { e.stopPropagation(); handleRemoveRoomMap(); }}
-                className="absolute top-1 right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] hover:bg-red-600"
+                className="bg-red-500 text-white rounded-full size-5 flex items-center justify-center text-[10px] hover:bg-red-600 ml-1 cursor-pointer"
               >
-                ×
+                X
               </button>
             </div>
           ) : (
@@ -164,11 +182,16 @@ export default function Sidebar(props: EditorState) {
         <>
           <div className="px-4 pt-3"><h3 className="text-[10px] font-medium tracking-wider uppercase text-gray-500 dark:text-gray-400">Room Dimensions</h3></div>
           <div className="px-4 pb-2 space-y-1.5">
-            <label className="block"><span className="text-[10px] uppercase tracking-wider text-gray-400">Width</span><input type="number" step="0.1" value={room.width ?? config.room.width} onChange={(e) => handleRoomChange('width', parseFloat(e.target.value) || 0)} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" /></label>
-            <label className="block"><span className="text-[10px] uppercase tracking-wider text-gray-400">Height</span><input type="number" step="0.1" value={room.height ?? config.room.height} onChange={(e) => handleRoomChange('height', parseFloat(e.target.value) || 0)} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" /></label>
-            <label className="block"><span className="text-[10px] uppercase tracking-wider text-gray-400">Origin X</span><input type="number" step="0.1" value={room.originX ?? config.room.originX} onChange={(e) => handleRoomChange('originX', parseFloat(e.target.value) || 0)} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" /></label>
-            <label className="block"><span className="text-[10px] uppercase tracking-wider text-gray-400">Origin Y</span><input type="number" step="0.1" value={room.originY ?? config.room.originY} onChange={(e) => handleRoomChange('originY', parseFloat(e.target.value) || 0)} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" /></label>
-            <label className="block"><span className="text-[10px] uppercase tracking-wider text-gray-400">Origin Z</span><input type="number" step="0.1" value={room.originZ ?? config.room.originZ} onChange={(e) => handleRoomChange('originZ', parseFloat(e.target.value) || 0)} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" /></label>
+            <div className="grid grid-cols-3 gap-1.5">
+              <label className="block"><span className="text-[10px] uppercase tracking-wider text-gray-400">Width</span><input type="number" step="0.1" value={room.width ?? config.room.width} onChange={(e) => handleRoomChange('width', parseFloat(e.target.value) || 0)} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" /></label>
+              <label className="block"><span className="text-[10px] uppercase tracking-wider text-gray-400">Length</span><input type="number" step="0.1" value={room.depth ?? config.room.depth} onChange={(e) => handleRoomChange('depth', parseFloat(e.target.value) || 0)} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" /></label>
+              <label className="block"><span className="text-[10px] uppercase tracking-wider text-gray-400">Height</span><input type="number" step="0.1" value={room.height ?? config.room.height} onChange={(e) => handleRoomChange('height', parseFloat(e.target.value) || 0)} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" /></label>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              <label className="block"><span className="text-[10px] uppercase tracking-wider text-gray-400">Origin X</span><input type="number" step="0.1" value={room.originX ?? config.room.originX} onChange={(e) => handleRoomChange('originX', parseFloat(e.target.value) || 0)} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" /></label>
+              <label className="block"><span className="text-[10px] uppercase tracking-wider text-gray-400">Origin Y</span><input type="number" step="0.1" value={room.originY ?? config.room.originY} onChange={(e) => handleRoomChange('originY', parseFloat(e.target.value) || 0)} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" /></label>
+              <label className="block"><span className="text-[10px] uppercase tracking-wider text-gray-400">Origin Z</span><input type="number" step="0.1" value={room.originZ ?? config.room.originZ} onChange={(e) => handleRoomChange('originZ', parseFloat(e.target.value) || 0)} className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500" /></label>
+            </div>
           </div>
         </>
       )}

@@ -46,7 +46,7 @@ export function serializeConfigToXML(config: ConfigModel): string {
   let xml = '<root>\n\n';
 
   // Room
-  xml += `\t<room width="${toXmlAttr(config.room.width)}" height="${toXmlAttr(config.room.height)}" origin_x="${toXmlAttr(config.room.originX)}" origin_y="${toXmlAttr(config.room.originY)}" origin_z="${toXmlAttr(config.room.originZ)}"/>\n`;
+  xml += `\t<room width="${toXmlAttr(config.room.width)}" depth="${toXmlAttr(config.room.depth)}" height="${toXmlAttr(config.room.height)}" origin_x="${toXmlAttr(config.room.originX)}" origin_y="${toXmlAttr(config.room.originY)}" origin_z="${toXmlAttr(config.room.originZ)}"/>\n`;
 
   // Info
   if (config.info.data) {
