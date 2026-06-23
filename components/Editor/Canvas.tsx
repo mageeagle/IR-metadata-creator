@@ -10,6 +10,13 @@ interface EditorState {
   roomMapPreviewUrl: string | null;
   selectedScenarioId: string | null;
   selectedMarkerId: string | null;
+  dragRoomPos: { x: number; y: number } | null;
+  dragState: {
+    isDragging: boolean;
+    draggedMarkerId: string | null;
+    startMouseX: number;
+    startMouseY: number;
+  } | null;
   loadXML: (xmlString: string) => void;
   exportFile: () => unknown;
   addScenario: (name?: string) => void;
@@ -28,6 +35,8 @@ interface EditorState {
   clearAll: () => void;
   setSelectedScenarioId: (id: string | null) => void;
   setSelectedMarkerId: (id: string | null) => void;
+  setDragRoomPos: (pos: { x: number; y: number } | null) => void;
+  setDragState: (state: Partial<{ isDragging: boolean; draggedMarkerId: string | null; startMouseX: number; startMouseY: number }> | null) => void;
 }
 
 function getMarkerCenterPx(
@@ -37,13 +46,13 @@ function getMarkerCenterPx(
   canvasWidth: number,
   canvasHeight: number,
 ): { left: string; top: string } {
-  if (!room || canvasWidth === 0 || canvasHeight === 0) {
+  if (!room || canvasWidth === 0 || canvasHeight === 0 || !isFinite(room.width) || !isFinite(room.height) || room.width <= 0 || room.height <= 0) {
     return { left: '0%', top: '0%' };
   }
   const pixelsPerX = canvasWidth / room.width;
   const pixelsPerY = canvasHeight / room.height;
-  const px = (markerX - room.originX) * pixelsPerX;
-  const py = (markerY - room.originY) * pixelsPerY;
+  const px = (markerX - room.originX) * pixelsPerX + canvasWidth / 2;
+  const py = -(markerY - room.originY) * pixelsPerY + canvasHeight / 2;
   return {
     left: `${(px / canvasWidth) * 100}%`,
     top: `${(py / canvasHeight) * 100}%`,
@@ -55,20 +64,21 @@ function Canvas({
   roomMapPreviewUrl,
   selectedScenarioId,
   selectedMarkerId,
+  dragRoomPos: storeDragRoomPos,
+  dragState: storeDragState,
   addSource,
   addReceiver,
   updatePosition,
   setSelectedMarkerId,
+  setDragRoomPos,
+  setDragState,
 }: EditorState) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
-  const [dragState, setDragState] = useState<{
-    isDragging: boolean;
-    draggedMarkerId: string | null;
-    startMouseX: number;
-    startMouseY: number;
-  }>({ isDragging: false, draggedMarkerId: null, startMouseX: 0, startMouseY: 0 });
-  const [dragRoomPos, setDragRoomPos] = useState<{ x: number; y: number } | null>(null);
+  const didDrag = useRef(false);
+  const dragRef = useRef<{ isDragging: boolean; draggedMarkerId: string | null; startMouseX: number; startMouseY: number } | null>(null);
+  const dragRoomRef = useRef<{ x: number; y: number } | null>(null);
+  const mouseUpRef = useRef<(() => void) | null>(null);
 
   const room = config?.room;
 
@@ -85,64 +95,88 @@ function Canvas({
     return () => window.removeEventListener('resize', updateSize);
   }, []);
 
-  // Drag handlers using document-level events
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      const drag = dragRef.current;
+      if (!drag) return;
+      const dx = Math.abs(e.clientX - drag.startMouseX);
+      const dy = Math.abs(e.clientY - drag.startMouseY);
+      if (dx > 3 || dy > 3) {
+        didDrag.current = true;
+      }
+      drag.startMouseX = e.clientX;
+      drag.startMouseY = e.clientY;
+      setDragState(drag);
+      const el = containerRef.current;
+      if (el && room && room.width > 0 && room.height > 0 && isFinite(room.width) && isFinite(room.height)) {
+        const rect = el.getBoundingClientRect();
+        const canvasWidth = rect.width;
+        const canvasHeight = rect.height;
+        if (canvasWidth > 0 && canvasHeight > 0) {
+          const relX = e.clientX - rect.left;
+          const relY = e.clientY - rect.top;
+          const pixelsPerX = canvasWidth / room.width;
+          const pixelsPerY = canvasHeight / room.height;
+          const px = relX - canvasWidth / 2;
+          const py = relY - canvasHeight / 2;
+          const roomPos = { x: px / pixelsPerX + room.originX, y: -py / pixelsPerY + room.originY };
+          dragRoomRef.current = roomPos;
+          setDragRoomPos(roomPos);
+        } else {
+          dragRoomRef.current = null;
+          setDragRoomPos(null);
+        }
+      } else {
+        dragRoomRef.current = null;
+        setDragRoomPos(null);
+      }
+    },
+    [room, setDragState, setDragRoomPos],
+  );
+
+  const handleMouseUp = useCallback(() => {
+    const drag = dragRef.current;
+    const roomPos = dragRoomRef.current;
+    if (drag?.draggedMarkerId && roomPos) {
+      const [sid, mid] = drag.draggedMarkerId.split('::');
+      if (sid && mid) {
+        updatePosition(sid, mid, { x: roomPos.x, y: roomPos.y });
+      }
+    }
+    didDrag.current = false;
+    dragRef.current = null;
+    dragRoomRef.current = null;
+    setDragState(null);
+    setDragRoomPos(null);
+    document.removeEventListener('mousemove', handleMouseMove);
+    if (mouseUpRef.current) {
+      document.removeEventListener('mouseup', mouseUpRef.current);
+    }
+  }, [updatePosition, setDragState, setDragRoomPos, handleMouseMove]);
+
+  mouseUpRef.current = handleMouseUp;
+
   const handleMouseDown = useCallback(
     (markerId: string, scenarioId: string) => (
       e: React.MouseEvent
     ) => {
       e.preventDefault();
-      setDragState({
+      didDrag.current = false;
+      const fullId = `${scenarioId}::${markerId}`;
+      dragRef.current = {
         isDragging: true,
-        draggedMarkerId: `${scenarioId}::${markerId}`,
+        draggedMarkerId: fullId,
         startMouseX: e.clientX,
         startMouseY: e.clientY,
-      });
+      };
+      setDragState(dragRef.current);
+      setSelectedMarkerId(fullId);
+      setDragRoomPos(null);
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', mouseUpRef.current!);
     },
-    [],
+    [setDragState, setDragRoomPos, handleMouseMove, handleMouseUp, setSelectedMarkerId],
   );
-
-  const handleMouseMove = useCallback(
-    (e: MouseEvent) => {
-      setDragState((prev) => ({ ...prev, startMouseX: e.clientX, startMouseY: e.clientY }));
-      const el = containerRef.current;
-      if (el && room) {
-        const rect = el.getBoundingClientRect();
-        const canvasWidth = rect.width;
-        const canvasHeight = rect.height;
-        const relX = e.clientX - rect.left;
-        const relY = e.clientY - rect.top;
-        setDragRoomPos({
-          x: (relX / canvasWidth) * room.width + room.originX,
-          y: (relY / canvasHeight) * room.height + room.originY,
-        });
-      } else {
-        setDragRoomPos(null);
-      }
-    },
-    [room],
-  );
-
-  const handleMouseUp = useCallback(() => {
-    if (dragState.draggedMarkerId && dragRoomPos) {
-      const [sid, mid] = dragState.draggedMarkerId.split('::');
-      if (sid && mid) {
-        updatePosition(sid, mid, { x: dragRoomPos.x, y: dragRoomPos.y });
-      }
-    }
-    setDragState({ isDragging: false, draggedMarkerId: null, startMouseX: 0, startMouseY: 0 });
-    setDragRoomPos(null);
-  }, [dragState.draggedMarkerId, dragRoomPos, updatePosition]);
-
-  useEffect(() => {
-    if (!dragState.isDragging) return;
-
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-    return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [dragState.isDragging, handleMouseMove, handleMouseUp]);
 
   const handleAddSource = useCallback(() => {
     if (!selectedScenarioId || !room) return;
@@ -167,9 +201,9 @@ function Canvas({
   // Extract drag position outside render to avoid ref-in-render eslint error
   let dragX: number | null = null;
   let dragY: number | null = null;
-  if (dragState.isDragging && dragRoomPos) {
-    dragX = dragRoomPos.x;
-    dragY = dragRoomPos.y;
+  if (dragRef.current?.isDragging && dragRoomRef.current) {
+    dragX = dragRoomRef.current.x;
+    dragY = dragRoomRef.current.y;
   }
 
   if (!roomMapPreviewUrl && !room) {
@@ -219,7 +253,7 @@ function Canvas({
       )}
 
       {/* Canvas container */}
-      <div ref={containerRef} className="relative w-full h-full">
+      <div ref={containerRef} className="relative w-full h-full" onClick={() => setSelectedMarkerId(null)}>
         {/* Room map image */}
         {roomMapPreviewUrl && (
           <Image
@@ -274,8 +308,11 @@ function Canvas({
                     boxShadow: isSelected ? '0 0 0 2px white, 0 0 0 4px #f59e0b' : undefined,
                   }}
                   onMouseDown={handleMouseDown(source.id, selectedScenarioId!)}
-                  onClick={() => {
-                    setSelectedMarkerId(selectedMarkerId === markerId ? null : markerId);
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!didDrag.current) {
+                      setSelectedMarkerId(markerId);
+                    }
                   }}
                 >
                   🔊
@@ -309,8 +346,11 @@ function Canvas({
                     boxShadow: isSelected ? '0 0 0 2px white, 0 0 0 4px #3b82f6' : undefined,
                   }}
                   onMouseDown={handleMouseDown(receiver.id, selectedScenarioId!)}
-                  onClick={() => {
-                    setSelectedMarkerId(selectedMarkerId === markerId ? null : markerId);
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!didDrag.current) {
+                      setSelectedMarkerId(markerId);
+                    }
                   }}
                 >
                   R
@@ -327,9 +367,9 @@ function Canvas({
 
               let finalX = source.position.x;
               let finalY = source.position.y;
-              if (dragState.isDragging && dragState.draggedMarkerId === markerId && dragX !== null && dragY !== null) {
-                finalX = dragX;
-                finalY = dragY;
+              if (dragRef.current?.isDragging && dragRef.current.draggedMarkerId === markerId && dragRoomRef.current) {
+                finalX = dragRoomRef.current.x;
+                finalY = dragRoomRef.current.y;
               }
               const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height);
 
@@ -348,9 +388,11 @@ function Canvas({
                     boxShadow: isSelected ? '0 0 0 2px white, 0 0 0 4px #f97316' : undefined,
                   }}
                   onMouseDown={handleMouseDown(source.id, selectedScenarioId!)}
-                  onClick={() => {
-                    console.log('CLICK source', markerId, 'current selected:', selectedMarkerId);
-                    setSelectedMarkerId(selectedMarkerId === markerId ? null : markerId);
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!didDrag.current) {
+                      setSelectedMarkerId(markerId);
+                    }
                   }}
                 >
                   S
@@ -367,9 +409,9 @@ function Canvas({
 
               let finalX = receiver.position.x;
               let finalY = receiver.position.y;
-              if (dragState.isDragging && dragState.draggedMarkerId === markerId && dragX !== null && dragY !== null) {
-                finalX = dragX;
-                finalY = dragY;
+              if (dragRef.current?.isDragging && dragRef.current.draggedMarkerId === markerId && dragRoomRef.current) {
+                finalX = dragRoomRef.current.x;
+                finalY = dragRoomRef.current.y;
               }
               const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height);
 
@@ -388,9 +430,11 @@ function Canvas({
                     boxShadow: isSelected ? '0 0 0 2px white, 0 0 0 4px #3b82f6' : undefined,
                   }}
                   onMouseDown={handleMouseDown(receiver.id, selectedScenarioId!)}
-                  onClick={() => {
-                    console.log('CLICK receiver', markerId, 'current selected:', selectedMarkerId);
-                    setSelectedMarkerId(selectedMarkerId === markerId ? null : markerId);
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (!didDrag.current) {
+                      setSelectedMarkerId(markerId);
+                    }
                   }}
                 >
                   R

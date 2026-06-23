@@ -15,6 +15,13 @@ interface EditorState {
   roomMapPreviewUrl: string | null;
   selectedScenarioId: string | null;
   selectedMarkerId: string | null;
+  dragRoomPos: { x: number; y: number } | null;
+  dragState: {
+    isDragging: boolean;
+    draggedMarkerId: string | null;
+    startMouseX: number;
+    startMouseY: number;
+  } | null;
 }
 
 function createEmptyConfig(): ConfigModel {
@@ -40,7 +47,7 @@ export function useEditorStore() {
     } catch {
       // Ignore parse errors
     }
-    return { config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null };
+    return { config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null };
   });
 
   const saveToLocalStorage = useCallback((config: ConfigModel) => {
@@ -306,7 +313,7 @@ export function useEditorStore() {
     if (state.roomMapPreviewUrl) {
       URL.revokeObjectURL(state.roomMapPreviewUrl);
     }
-    setState({ config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null });
+    setState({ config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null });
   }, [state.roomMapPreviewUrl]);
 
   const setSelectedScenarioId = useCallback((id: string | null) => {
@@ -316,6 +323,28 @@ export function useEditorStore() {
   const setSelectedMarkerId = useCallback((id: string | null) => {
     console.log('SET selectedMarkerId:', id);
     setState(prev => ({ ...prev, selectedMarkerId: id }));
+  }, []);
+
+  const setDragRoomPos = useCallback((pos: { x: number; y: number } | null) => {
+    setState(prev => ({ ...prev, dragRoomPos: pos }));
+  }, []);
+
+  const setDragState = useCallback((state: Partial<{
+    isDragging: boolean;
+    draggedMarkerId: string | null;
+    startMouseX: number;
+    startMouseY: number;
+  }> | null) => {
+    const mergeState = (prev: { isDragging: boolean; draggedMarkerId: string | null; startMouseX: number; startMouseY: number }, next: Partial<typeof prev> | null) => {
+      if (!next) return null;
+      return {
+        isDragging: next.isDragging ?? prev.isDragging,
+        draggedMarkerId: next.draggedMarkerId ?? prev.draggedMarkerId,
+        startMouseX: next.startMouseX ?? prev.startMouseX,
+        startMouseY: next.startMouseY ?? prev.startMouseY,
+      };
+    };
+    setState(prev => ({ ...prev, dragState: prev.dragState ? mergeState(prev.dragState, state) : state as { isDragging: boolean; draggedMarkerId: string | null; startMouseX: number; startMouseY: number } | null }));
   }, []);
 
   useEffect(() => {
@@ -342,6 +371,8 @@ export function useEditorStore() {
     clearAll,
     setSelectedScenarioId,
     setSelectedMarkerId,
+    setDragRoomPos,
+    setDragState,
   };
 }
 

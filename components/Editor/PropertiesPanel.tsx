@@ -24,6 +24,11 @@ function PositionInputs({
     { label: 'Rot Z (°)', key: 'rotZ' as const, step: '1' },
   ];
 
+  const safeValue = (val: unknown): number => {
+    if (typeof val === 'number' && isFinite(val)) return Math.round(val * 100) / 100;
+    return 0;
+  };
+
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-3 gap-1.5">
@@ -35,7 +40,7 @@ function PositionInputs({
             <input
               type="number"
               step={step}
-              value={position[key] ?? 0}
+              value={safeValue(position[key])}
               onChange={(e) => onPositionChange({ [key]: parseFloat(e.target.value) || 0 })}
               disabled={disabled}
               className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -52,7 +57,7 @@ function PositionInputs({
             <input
               type="number"
               step={step}
-              value={position[key] ?? 0}
+              value={safeValue(position[key])}
               onChange={(e) => onPositionChange({ [key]: parseFloat(e.target.value) || 0 })}
               disabled={disabled}
               className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
@@ -129,21 +134,21 @@ function MovingReceiverCard({
       <div className="space-y-1">
         <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Channels</label>
         {channels.map((fileName, index) => (
-          <div key={index} className="flex gap-1.5 items-center">
-            <span className="text-[10px] font-medium text-gray-400 shrink-0 w-8">ch{index + 1}</span>
-            <input
-              type="text"
-              value={fileName}
-              onChange={(e) => {
-                const updated = [...channels];
-                updated[index] = e.target.value;
-                onFilePathsChange(updated);
-              }}
-              placeholder="file path"
-              className="flex-1 px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-          </div>
-        ))}
+           <div key={index} className="flex gap-1.5 items-center">
+             <span className="text-[10px] font-medium text-gray-400 shrink-0 w-8">ch{index + 1}</span>
+             <input
+               type="text"
+               value={fileName ?? ''}
+               onChange={(e) => {
+                 const updated = [...channels];
+                 updated[index] = e.target.value;
+                 onFilePathsChange(updated);
+               }}
+               placeholder="file path"
+               className="flex-1 px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+             />
+           </div>
+         ))}
         <Button
           variant="default"
           className="w-full text-xs mt-1"
@@ -180,6 +185,8 @@ interface PropertiesPanelProps {
   config: ConfigModel | null;
   selectedScenarioId: string | null;
   selectedMarkerId: string | null;
+  dragRoomPos: { x: number; y: number } | null;
+  draggedMarkerId: string | null;
   updateScenario: (id: string, updates: { name?: string; locked?: 'source' | 'receiver' | 'none' }) => void;
   addSource: (scenarioId: string, position?: Partial<Position>) => void;
   removeSource: (scenarioId: string, sourceId: string) => void;
@@ -193,6 +200,8 @@ export default function PropertiesPanel({
   config,
   selectedScenarioId,
   selectedMarkerId,
+  dragRoomPos,
+  draggedMarkerId,
   updateScenario,
   addSource,
   removeSource,
@@ -333,10 +342,16 @@ export default function PropertiesPanel({
         </div>
 
         {/* Single marker selected - show only that marker's properties */}
-        {markerType === 'source' && (() => {
+      {markerType === 'source' && (() => {
           const source = scenario.lockedSources?.find(s => s.id === markerId) ?? scenario.sources?.find(s => s.id === markerId);
           if (!source) return null;
           const isLocked = !!scenario.lockedSources?.find(s => s.id === markerId);
+          const isBeingDragged = draggedMarkerId === `${selectedScenarioId}::${markerId}`;
+          const livePosition = isBeingDragged && dragRoomPos ? {
+            ...source.position,
+            x: dragRoomPos.x,
+            y: dragRoomPos.y,
+          } : source.position;
           return (
             <>
               {isLocked ? (
@@ -351,6 +366,11 @@ export default function PropertiesPanel({
                   onRemove={() => handleRemoveSource(scenario.sources!.findIndex(s => s.id === markerId!))}
                 />
               )}
+              {isBeingDragged && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 px-1.5 py-1">
+                  X: {(livePosition.x ?? 0).toFixed(2)}m, Y: {(livePosition.y ?? 0).toFixed(2)}m, Z: {(livePosition.z ?? 0).toFixed(2)}m | Rot X: {(livePosition.rotX ?? 0).toFixed(2)}°, Rot Y: {(livePosition.rotY ?? 0).toFixed(2)}°, Rot Z: {(livePosition.rotZ ?? 0).toFixed(2)}°
+                </div>
+              )}
             </>
           );
         })()}
@@ -360,26 +380,46 @@ export default function PropertiesPanel({
           const movingReceiver = scenario.receivers?.find(r => r.id === markerId);
           const receiver = lockedReceiver ?? movingReceiver;
           if (!receiver) return null;
+          const isBeingDragged = draggedMarkerId === `${selectedScenarioId}::${markerId}`;
+          const livePosition = isBeingDragged && dragRoomPos ? {
+            ...receiver.position,
+            x: dragRoomPos.x,
+            y: dragRoomPos.y,
+          } : receiver.position;
           if (lockedReceiver) {
             const idx = scenario.lockedReceivers!.findIndex(r => r.id === markerId);
             return (
-              <LockedReceiverCard
-                receiver={lockedReceiver}
-                onPositionChange={(updates) => handleUpdateLockedReceiverPosition(idx, updates)}
-              />
+              <>
+                <LockedReceiverCard
+                  receiver={lockedReceiver}
+                  onPositionChange={(updates) => handleUpdateLockedReceiverPosition(idx, updates)}
+                />
+             {isBeingDragged && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 px-1.5 py-1">
+                  X: {(livePosition.x ?? 0).toFixed(2)}m, Y: {(livePosition.y ?? 0).toFixed(2)}m, Z: {(livePosition.z ?? 0).toFixed(2)}m | Rot X: {(livePosition.rotX ?? 0).toFixed(2)}°, Rot Y: {(livePosition.rotY ?? 0).toFixed(2)}°, Rot Z: {(livePosition.rotZ ?? 0).toFixed(2)}°
+                </div>
+              )}
+              </>
             );
           }
           const idx = scenario.receivers!.findIndex(r => r.id === markerId);
           return (
-            <MovingReceiverCard
-              key={receiver.id}
-              receiver={receiver}
-              scenarioId={scenario.id}
-              onPositionChange={(updates) => handleUpdateReceiverPosition(idx, updates)}
-              onFilePathsChange={(fileNames) => handleUpdateReceiverFilePaths(idx, fileNames)}
-              onAddChannel={() => handleAddChannel(idx)}
-              onRemove={() => handleRemoveReceiver(idx)}
-            />
+            <>
+              <MovingReceiverCard
+                key={receiver.id}
+                receiver={receiver}
+                scenarioId={scenario.id}
+                onPositionChange={(updates) => handleUpdateReceiverPosition(idx, updates)}
+                onFilePathsChange={(fileNames) => handleUpdateReceiverFilePaths(idx, fileNames)}
+                onAddChannel={() => handleAddChannel(idx)}
+                onRemove={() => handleRemoveReceiver(idx)}
+              />
+              {isBeingDragged && (
+                <div className="text-xs text-gray-500 dark:text-gray-400 px-1.5 py-1">
+                  X: {(livePosition.x ?? 0).toFixed(2)}m, Y: {(livePosition.y ?? 0).toFixed(2)}m, Z: {(livePosition.z ?? 0).toFixed(2)}m | Rot X: {(livePosition.rotX ?? 0).toFixed(2)}°, Rot Y: {(livePosition.rotY ?? 0).toFixed(2)}°, Rot Z: {(livePosition.rotZ ?? 0).toFixed(2)}°
+                </div>
+              )}
+            </>
           );
         })()}
 

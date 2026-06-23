@@ -13,12 +13,20 @@ export default function EditorPage() {
       <div className="hidden md:flex flex-1 min-h-0">
         <Sidebar {...state} />
         <Canvas {...state} />
-        <PropertiesPanel {...state} />
+        <PropertiesPanel
+          {...state}
+          dragRoomPos={state.dragRoomPos ?? null}
+          draggedMarkerId={state.dragState?.draggedMarkerId ?? null}
+        />
       </div>
       <div className="md:hidden flex flex-col h-full">
         <Sidebar {...state} />
         <Canvas {...state} />
-        <PropertiesPanel {...state} />
+        <PropertiesPanel
+          {...state}
+          dragRoomPos={state.dragRoomPos ?? null}
+          draggedMarkerId={state.dragState?.draggedMarkerId ?? null}
+        />
       </div>
     </div>
   );
