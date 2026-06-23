@@ -69,7 +69,9 @@ export function useEditorStore() {
         room: { width: parsed.room.width, height: parsed.room.height, originX: parsed.room.originX, originY: parsed.room.originY, originZ: parsed.room.originZ },
         info: { data: parsed.info.data ?? '' },
         scenarios: parsed.scenarios.map((sc) => {
-          const lockedSources: Source[] = (sc.lockedSources || []).map((s) => {
+          const lockedSourcesArr: Array<Record<string, number>> = (sc.lockedSources as Array<Record<string, number>>) ?? [];
+          const lockedSourceSingle = sc.lockedSource as Record<string, number> | undefined;
+          const lockedSources: Source[] = (lockedSourcesArr.length > 0 ? lockedSourcesArr : (lockedSourceSingle ? [lockedSourceSingle] : []) as Array<Record<string, number>>).map((s) => {
             const srcX = parseFloat((s as Record<string, unknown>)?.['src_x'] as string) || 0;
             const srcY = parseFloat((s as Record<string, unknown>)?.['src_y'] as string) || 0;
             const srcZ = parseFloat((s as Record<string, unknown>)?.['src_z'] as string) || 0;
@@ -274,6 +276,26 @@ export function useEditorStore() {
     }));
   }, []);
 
+  const updateLockedPosition = useCallback((scenarioId: string, markerId: string, positionData: Partial<Position>) => {
+    setState(prev => ({
+      ...prev,
+      config: prev.config ? {
+        ...prev.config,
+        scenarios: prev.config.scenarios.map(s => {
+          if (s.id !== scenarioId) return s;
+          const updateLocked = <T extends { id: string; position: Partial<Position> }>(items: T[]) => items.map((item: T) =>
+            item.id === markerId ? { ...item, position: { ...(item.position as Partial<Position>), ...positionData } } : item
+          );
+          return {
+            ...s,
+            lockedSources: updateLocked(s.lockedSources) as Source[],
+            lockedReceivers: updateLocked(s.lockedReceivers) as Receiver[],
+          };
+        }),
+      } : null,
+    }));
+  }, []);
+
   const updatePosition = useCallback((scenarioId: string, markerId: string, positionData: Partial<Position>) => {
     setState(prev => ({
       ...prev,
@@ -407,6 +429,7 @@ export function useEditorStore() {
     removeSource,
     addReceiver,
     removeReceiver,
+    updateLockedPosition,
     updatePosition,
     updateFilePaths,
     loadRoomMap,

@@ -441,37 +441,33 @@ export default function PropertiesPanel({
             )}
 
             {/* Moving Sources */}
-            {scenario.locked !== 'receiver' && (
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Sources</label>
-                {(scenario.sources || []).map((source, idx) => (
-                  <MovingSourceCard
-                    key={source.id}
-                    source={source}
-                    onPositionChange={(updates) => handleUpdateSourcePosition(idx, updates)}
-                    onRemove={() => handleRemoveSource(idx)}
-                  />
-                ))}
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Sources</label>
+              {(scenario.sources || []).map((source, idx) => (
+                <MovingSourceCard
+                  key={source.id}
+                  source={source}
+                  onPositionChange={(updates) => handleUpdateSourcePosition(idx, updates)}
+                  onRemove={() => handleRemoveSource(idx)}
+                />
+              ))}
+            </div>
 
             {/* Moving Receivers */}
-            {scenario.locked !== 'source' && (
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Receivers</label>
-                {(scenario.receivers || []).map((receiver, idx) => (
-                  <MovingReceiverCard
-                    key={receiver.id}
-                    receiver={receiver}
-                    scenarioId={scenario.id}
-                    onPositionChange={(updates) => handleUpdateReceiverPosition(idx, updates)}
-                    onFilePathsChange={(fileNames) => handleUpdateReceiverFilePaths(idx, fileNames)}
-                    onAddChannel={() => handleAddChannel(idx)}
-                    onRemove={() => handleRemoveReceiver(idx)}
-                  />
-                ))}
-              </div>
-            )}
+            <div className="space-y-1.5">
+              <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Receivers</label>
+              {(scenario.receivers || []).map((receiver, idx) => (
+                <MovingReceiverCard
+                  key={receiver.id}
+                  receiver={receiver}
+                  scenarioId={scenario.id}
+                  onPositionChange={(updates) => handleUpdateReceiverPosition(idx, updates)}
+                  onFilePathsChange={(fileNames) => handleUpdateReceiverFilePaths(idx, fileNames)}
+                  onAddChannel={() => handleAddChannel(idx)}
+                  onRemove={() => handleRemoveReceiver(idx)}
+                />
+              ))}
+            </div>
           </>
         )}
       </div>
@@ -479,16 +475,12 @@ export default function PropertiesPanel({
       {/* Add buttons - only shown when no specific marker selected */}
       {markerType === null && (
         <div className="p-1.5 border-t border-gray-200 dark:border-gray-700 space-y-1">
-          {scenario.locked !== 'source' && (
-            <Button variant="primary" className="w-full text-xs" onClick={handleAddSource}>
-              + Add Source
-            </Button>
-          )}
-          {scenario.locked !== 'receiver' && (
-            <Button variant="success" className="w-full text-xs" onClick={handleAddReceiver}>
-              + Add Receiver
-            </Button>
-          )}
+          <Button variant="primary" className="w-full text-xs" onClick={handleAddSource}>
+            + Add Source
+          </Button>
+          <Button variant="success" className="w-full text-xs" onClick={handleAddReceiver}>
+            + Add Receiver
+          </Button>
         </div>
       )}
     </aside>

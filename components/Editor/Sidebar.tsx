@@ -222,8 +222,8 @@ export default function Sidebar(props: EditorState) {
                   <span className="text-xs text-zinc-700 dark:text-zinc-300 flex-1 truncate">{scenario.name}</span>
                   {scenario.locked === 'source' && <span className="px-1.5 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-300 text-[10px] font-bold rounded">S</span>}
                   {scenario.locked === 'receiver' && <span className="px-1.5 py-0.5 bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-300 text-[10px] font-bold rounded">R</span>}
-                  {scenario.locked === 'none' && scenario.sources.length > 0 && <span className="text-[10px] text-gray-400" title={`${scenario.sources.length} source(s)`}>{scenario.sources.length}</span>}
-                  {scenario.locked === 'none' && scenario.receivers.length > 0 && <span className="text-[10px] text-gray-400" title={`${scenario.receivers.length} receiver(s)`}>+{scenario.receivers.length}</span>}
+                  {scenario.sources.length > 0 && <span className="text-[10px] text-gray-400" title={`${scenario.sources.length} source(s)`}>{scenario.sources.length}</span>}
+                  {scenario.receivers.length > 0 && <span className="text-[10px] text-gray-400" title={`${scenario.receivers.length} receiver(s)`}>+{scenario.receivers.length}</span>}
                   <Button variant="danger" onClick={(e) => { e.stopPropagation(); deleteScenario(scenario.id); }} className="px-1.5 py-0.5 text-[10px] h-auto">×</Button>
                 </div>
               );
