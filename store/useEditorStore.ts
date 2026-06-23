@@ -9,6 +9,8 @@ function generateId(): string {
   return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 }
 
+type CanvasMode = 'roomz' | 'normal';
+
 interface EditorState {
   config: ConfigModel | null;
   roomMapImage: File | null;
@@ -22,6 +24,7 @@ interface EditorState {
     startMouseX: number;
     startMouseY: number;
   } | null;
+  canvasMode: CanvasMode;
 }
 
 function createEmptyConfig(): ConfigModel {
@@ -42,12 +45,12 @@ export function useEditorStore() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return { ...parsed, roomMapImage: null, roomMapPreviewUrl: null };
+        return { ...parsed, roomMapImage: null, roomMapPreviewUrl: null, canvasMode: (parsed.canvasMode as CanvasMode) || 'roomz' };
       }
     } catch {
       // Ignore parse errors
     }
-    return { config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null };
+    return { config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null, canvasMode: 'roomz' as CanvasMode };
   });
 
   const saveToLocalStorage = useCallback((config: ConfigModel) => {
@@ -66,30 +69,68 @@ export function useEditorStore() {
         room: { width: parsed.room.width, height: parsed.room.height, originX: parsed.room.originX, originY: parsed.room.originY, originZ: parsed.room.originZ },
         info: { data: parsed.info.data ?? '' },
         scenarios: parsed.scenarios.map((sc) => {
-          const lockedSources: Source[] = (sc.lockedSources || []).map((s) => ({
-            id: generateId(),
-            isLocked: true,
-            position: { x: (s.src_x as number) ?? 0, y: (s.src_y as number) ?? 0, z: (s.src_z as number) ?? 0, rotX: (s.rot_x as number) ?? 0, rotY: (s.rot_y as number) ?? 0, rotZ: (s.rot_z as number) ?? 0 },
-          }));
+          const lockedSources: Source[] = (sc.lockedSources || []).map((s) => {
+            const srcX = parseFloat((s as Record<string, unknown>)?.['src_x'] as string) || 0;
+            const srcY = parseFloat((s as Record<string, unknown>)?.['src_y'] as string) || 0;
+            const srcZ = parseFloat((s as Record<string, unknown>)?.['src_z'] as string) || 0;
+            const rotX = parseFloat((s as Record<string, unknown>)?.['rot_x'] as string) || 0;
+            const rotY = parseFloat((s as Record<string, unknown>)?.['rot_y'] as string) || 0;
+            const rotZ = parseFloat((s as Record<string, unknown>)?.['rot_z'] as string) || 0;
+            return {
+              id: generateId(),
+              isLocked: true,
+              position: { x: srcX, y: srcY, z: srcZ, rotX: rotX, rotY: rotY, rotZ: rotZ },
+            };
+          });
 
-          const lockedReceivers: Receiver[] = ((sc.lockedReceiver ? [sc.lockedReceiver] : []) as Array<Record<string, number>>).map((r) => ({
-            id: generateId(),
-            isLocked: true,
-            fileNames: [],
-            position: { x: (r.rcv_x as number) ?? 0, y: (r.rcv_y as number) ?? 0, z: (r.rcv_z as number) ?? 0, rotX: (r.rot_x as number) ?? 0, rotY: (r.rot_y as number) ?? 0, rotZ: (r.rot_z as number) ?? 0 },
-          }));
+          const lockedReceivers: Receiver[] = ((sc.lockedReceiver ? [sc.lockedReceiver] : []) as Array<Record<string, number>>).map((r) => {
+            const rcvX = parseFloat((r as Record<string, unknown>)?.['rcv_x'] as string) || 0;
+            const rcvY = parseFloat((r as Record<string, unknown>)?.['rcv_y'] as string) || 0;
+            const rcvZ = parseFloat((r as Record<string, unknown>)?.['rcv_z'] as string) || 0;
+            const rotX = parseFloat((r as Record<string, unknown>)?.['rot_x'] as string) || 0;
+            const rotY = parseFloat((r as Record<string, unknown>)?.['rot_y'] as string) || 0;
+            const rotZ = parseFloat((r as Record<string, unknown>)?.['rot_z'] as string) || 0;
+            return {
+              id: generateId(),
+              isLocked: true,
+              fileNames: [],
+              position: { x: rcvX, y: rcvY, z: rcvZ, rotX: rotX, rotY: rotY, rotZ: rotZ },
+            };
+          });
 
-          const sources: Source[] = (sc.sources || []).map((s) => ({
-            id: generateId(),
-            filePath: typeof s.file_name === 'string' ? s.file_name : undefined,
-            position: { x: (s.src_x as number) ?? 0, y: (s.src_y as number) ?? 0, z: (s.src_z as number) ?? 0, rotX: (s.rot_x as number) ?? 0, rotY: (s.rot_y as number) ?? 0, rotZ: (s.rot_z as number) ?? 0 },
-          }));
+      const sources: Source[] = (sc.sources || []).map((s) => {
+            const inner = (s as Record<string, unknown>)?.['source'];
+            const sItem = Array.isArray(inner) ? inner[0] : (typeof inner === 'object' && inner !== null ? inner : s);
+            const srcX = parseFloat((sItem as Record<string, unknown>)?.['_src_x'] as string) || 0;
+            const srcY = parseFloat((sItem as Record<string, unknown>)?.['_src_y'] as string) || 0;
+            const srcZ = parseFloat((sItem as Record<string, unknown>)?.['_src_z'] as string) || 0;
+            const rotX = parseFloat((sItem as Record<string, unknown>)?.['_rot_x'] as string) || 0;
+            const rotY = parseFloat((sItem as Record<string, unknown>)?.['_rot_y'] as string) || 0;
+            const rotZ = parseFloat((sItem as Record<string, unknown>)?.['_rot_z'] as string) || 0;
+            const filePath = (sItem as Record<string, unknown>)?.['_file_name'];
+            return {
+              id: generateId(),
+              filePath: typeof filePath === 'string' ? filePath : (Array.isArray(filePath) && typeof filePath[0] === 'string' ? filePath[0] : undefined),
+              position: { x: srcX, y: srcY, z: srcZ, rotX: rotX, rotY: rotY, rotZ: rotZ },
+            };
+          });
 
-          const receivers: Receiver[] = (sc.receivers || []).map((r) => ({
-            id: generateId(),
-            fileNames: Array.isArray(r.file_name) ? r.file_name : ([r.file_name] as string[]),
-            position: { x: (r.rcv_x as number) ?? 0, y: (r.rcv_y as number) ?? 0, z: (r.rcv_z as number) ?? 0, rotX: (r.rot_x as number) ?? 0, rotY: (r.rot_y as number) ?? 0, rotZ: (r.rot_z as number) ?? 0 },
-          }));
+          const receivers: Receiver[] = (sc.receivers || []).map((r) => {
+            const inner = (r as Record<string, unknown>)?.['receiver'];
+            const rItem = Array.isArray(inner) ? inner[0] : (typeof inner === 'object' && inner !== null ? inner : r);
+            const rcvX = parseFloat((rItem as Record<string, unknown>)?.['_rcv_x'] as string) || 0;
+            const rcvY = parseFloat((rItem as Record<string, unknown>)?.['_rcv_y'] as string) || 0;
+            const rcvZ = parseFloat((rItem as Record<string, unknown>)?.['_rcv_z'] as string) || 0;
+            const rotX = parseFloat((rItem as Record<string, unknown>)?.['_rot_x'] as string) || 0;
+            const rotY = parseFloat((rItem as Record<string, unknown>)?.['_rot_y'] as string) || 0;
+            const rotZ = parseFloat((rItem as Record<string, unknown>)?.['_rot_z'] as string) || 0;
+            const fileNames = Array.isArray((r as Record<string, unknown>)?.['_file_name']) ? (r as Record<string, unknown>)['_file_name'] as string[] : [(r as Record<string, unknown>)?.['_file_name'] as string ?? ''];
+            return {
+              id: generateId(),
+              fileNames: fileNames.map(f => typeof f === 'string' ? f : String(f)),
+              position: { x: rcvX, y: rcvY, z: rcvZ, rotX: rotX, rotY: rotY, rotZ: rotZ },
+            };
+          });
 
           return {
             id: generateId(),
@@ -103,10 +144,10 @@ export function useEditorStore() {
         }),
       };
 
-      setState(prev => ({ ...prev, config }));
+      setState(prev => ({ ...prev, config, canvasMode: 'roomz' as CanvasMode }));
     } catch (err) {
       console.error('Failed to parse XML:', err);
-      setState(prev => ({ ...prev, config: createEmptyConfig() }));
+      setState(prev => ({ ...prev, config: createEmptyConfig(), canvasMode: 'roomz' as CanvasMode }));
     }
   }, []);
 
@@ -313,7 +354,7 @@ export function useEditorStore() {
     if (state.roomMapPreviewUrl) {
       URL.revokeObjectURL(state.roomMapPreviewUrl);
     }
-    setState({ config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null });
+    setState({ config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null, canvasMode: 'roomz' as CanvasMode });
   }, [state.roomMapPreviewUrl]);
 
   const setSelectedScenarioId = useCallback((id: string | null) => {
@@ -347,6 +388,10 @@ export function useEditorStore() {
     setState(prev => ({ ...prev, dragState: prev.dragState ? mergeState(prev.dragState, state) : state as { isDragging: boolean; draggedMarkerId: string | null; startMouseX: number; startMouseY: number } | null }));
   }, []);
 
+  const toggleCanvasMode = useCallback(() => {
+    setState(prev => ({ ...prev, canvasMode: prev.canvasMode === 'roomz' ? 'normal' : 'roomz' }));
+  }, []);
+
   useEffect(() => {
     if (state.config) saveToLocalStorage(state.config);
   }, [state.config, saveToLocalStorage]);
@@ -373,6 +418,7 @@ export function useEditorStore() {
     setSelectedMarkerId,
     setDragRoomPos,
     setDragState,
+    toggleCanvasMode,
   };
 }
 

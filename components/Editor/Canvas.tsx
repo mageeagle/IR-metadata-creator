@@ -4,6 +4,8 @@ import { useState, useCallback, useEffect, useRef } from 'react';
 import Image from 'next/image';
 import type { ConfigModel, RoomConfig, Position } from '@/lib/types';
 
+type CanvasMode = 'roomz' | 'normal';
+
 interface EditorState {
   config: ConfigModel | null;
   roomMapImage: File | null;
@@ -17,6 +19,7 @@ interface EditorState {
     startMouseX: number;
     startMouseY: number;
   } | null;
+  canvasMode: CanvasMode;
   loadXML: (xmlString: string) => void;
   exportFile: () => unknown;
   addScenario: (name?: string) => void;
@@ -37,6 +40,7 @@ interface EditorState {
   setSelectedMarkerId: (id: string | null) => void;
   setDragRoomPos: (pos: { x: number; y: number } | null) => void;
   setDragState: (state: Partial<{ isDragging: boolean; draggedMarkerId: string | null; startMouseX: number; startMouseY: number }> | null) => void;
+  toggleCanvasMode: () => void;
 }
 
 function getMarkerCenterPx(
@@ -45,14 +49,17 @@ function getMarkerCenterPx(
   room: RoomConfig | undefined,
   canvasWidth: number,
   canvasHeight: number,
+  canvasMode: CanvasMode,
 ): { left: string; top: string } {
   if (!room || canvasWidth === 0 || canvasHeight === 0 || !isFinite(room.width) || !isFinite(room.height) || room.width <= 0 || room.height <= 0) {
     return { left: '0%', top: '0%' };
   }
+  const effectiveOriginX = canvasMode === 'roomz' ? room.originX + room.width / 2 : room.originX;
+  const effectiveOriginY = canvasMode === 'roomz' ? room.originY + room.height / 2 : room.originY;
   const pixelsPerX = canvasWidth / room.width;
   const pixelsPerY = canvasHeight / room.height;
-  const px = (markerX - room.originX) * pixelsPerX + canvasWidth / 2;
-  const py = -(markerY - room.originY) * pixelsPerY + canvasHeight / 2;
+  const px = (markerX - effectiveOriginX) * pixelsPerX + canvasWidth / 2;
+  const py = -(markerY - effectiveOriginY) * pixelsPerY + canvasHeight / 2;
   return {
     left: `${(px / canvasWidth) * 100}%`,
     top: `${(py / canvasHeight) * 100}%`,
@@ -72,6 +79,8 @@ function Canvas({
   setSelectedMarkerId,
   setDragRoomPos,
   setDragState,
+  canvasMode,
+  toggleCanvasMode,
 }: EditorState) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -119,7 +128,9 @@ function Canvas({
           const pixelsPerY = canvasHeight / room.height;
           const px = relX - canvasWidth / 2;
           const py = relY - canvasHeight / 2;
-          const roomPos = { x: px / pixelsPerX + room.originX, y: -py / pixelsPerY + room.originY };
+          const effectiveOriginX = canvasMode === 'roomz' ? room.originX + room.width / 2 : room.originX;
+          const effectiveOriginY = canvasMode === 'roomz' ? room.originY + room.height / 2 : room.originY;
+          const roomPos = { x: px / pixelsPerX + effectiveOriginX, y: -py / pixelsPerY + effectiveOriginY };
           dragRoomRef.current = roomPos;
           setDragRoomPos(roomPos);
         } else {
@@ -234,7 +245,7 @@ function Canvas({
     <main className="flex-1 min-w-0 bg-zinc-100 dark:bg-zinc-950 overflow-hidden relative">
       {/* Toolbar buttons */}
       {selectedScenarioId && (roomMapPreviewUrl || room) && (
-        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex gap-1.5">
+        <div className="absolute top-2 left-1/2 -translate-x-1/2 z-30 flex gap-1.5 items-center">
           <button
             onClick={handleAddSource}
             disabled={!room}
@@ -249,6 +260,17 @@ function Canvas({
           >
             + Receiver
           </button>
+          <div className="flex items-center bg-gray-700 rounded shadow">
+            <button
+              onClick={toggleCanvasMode}
+              className="cursor-pointer px-2.5 py-1 bg-gray-600 text-white text-xs font-medium rounded-l hover:bg-gray-700 transition-colors border-r border-gray-500"
+            >
+              Change Origin Mode
+            </button>
+            <span className="px-2.5 py-1 text-xs text-gray-200 font-medium">
+              {canvasMode === 'roomz' ? 'Origin: Bottom-Left' : 'Origin: Center'}
+            </span>
+          </div>
         </div>
       )}
 
@@ -290,6 +312,7 @@ function Canvas({
                 room,
                 containerSize.width,
                 containerSize.height,
+                canvasMode,
               );
               const markerId = `${selectedScenarioId}::${source.id}`;
               const isSelected = selectedMarkerId === markerId;
@@ -328,6 +351,7 @@ function Canvas({
                 room,
                 containerSize.width,
                 containerSize.height,
+                canvasMode,
               );
               const markerId = `${selectedScenarioId}::${receiver.id}`;
               const isSelected = selectedMarkerId === markerId;
@@ -371,7 +395,7 @@ function Canvas({
                 finalX = dragRoomRef.current.x;
                 finalY = dragRoomRef.current.y;
               }
-              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height);
+              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode);
 
               return (
                 <div
@@ -413,7 +437,7 @@ function Canvas({
                 finalX = dragRoomRef.current.x;
                 finalY = dragRoomRef.current.y;
               }
-              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height);
+              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode);
 
               return (
                 <div
