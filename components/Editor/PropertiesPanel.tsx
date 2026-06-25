@@ -426,23 +426,16 @@ export default function PropertiesPanel({
         {/* No specific marker selected - show all markers */}
         {markerType === null && (
           <>
-            {/* Locked Sources */}
-            {scenario.locked === 'source' && (
-              <div className="space-y-1.5">
-                <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Locked Sources</label>
-                {(scenario.lockedSources || []).map((source, idx) => (
-                  <LockedSourceCard
-                    key={source.id}
-                    source={source}
-                    onPositionChange={(updates) => handleUpdateLockedPosition(idx, updates)}
-                  />
-                ))}
-              </div>
-            )}
-
-            {/* Moving Sources */}
+            {/* All Sources (locked + moving) */}
             <div className="space-y-1.5">
               <label className="block text-[10px] font-medium text-gray-500 dark:text-gray-400">Sources</label>
+              {(scenario.lockedSources || []).map((source, idx) => (
+                <LockedSourceCard
+                  key={source.id}
+                  source={source}
+                  onPositionChange={(updates) => handleUpdateLockedPosition(idx, updates)}
+                />
+              ))}
               {(scenario.sources || []).map((source, idx) => (
                 <MovingSourceCard
                   key={source.id}

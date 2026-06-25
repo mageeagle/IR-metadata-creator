@@ -51,3 +51,9 @@ export interface ConfigModel {
 }
 
 export type BulkLoadTarget = 'sources' | 'receivers';
+
+export interface GridSettings {
+  snapToGrid: boolean;
+  gridSize: number;
+  showGrid: boolean;
+}

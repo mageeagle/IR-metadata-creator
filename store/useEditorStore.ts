@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, createContext, useContext } from 'react';
-import type { ConfigModel, Source, Receiver, Position, BulkLoadTarget, RoomConfig } from '../lib/types';
+import type { ConfigModel, Source, Receiver, Position, BulkLoadTarget, RoomConfig, GridSettings } from '../lib/types';
 import { parseConfigXML } from '../lib/xml-parser';
 import { serializeConfigToXML } from '../lib/xml-serializer';
 
@@ -8,8 +8,6 @@ const STORAGE_KEY = 'room-z-preset-maker';
 function generateId(): string {
   return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
 }
-
-type CanvasMode = 'roomz' | 'normal';
 
 interface EditorState {
   config: ConfigModel | null;
@@ -24,7 +22,7 @@ interface EditorState {
     startMouseX: number;
     startMouseY: number;
   } | null;
-  canvasMode: CanvasMode;
+  gridSettings: GridSettings;
 }
 
 function createEmptyConfig(): ConfigModel {
@@ -45,12 +43,14 @@ export function useEditorStore() {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        return { ...parsed, roomMapImage: null, roomMapPreviewUrl: null, canvasMode: (parsed.canvasMode as CanvasMode) || 'roomz' };
+        const savedGrid = parsed.gridSettings as GridSettings | undefined;
+        const gridDefaults: GridSettings = { snapToGrid: false, gridSize: 1, showGrid: false };
+        return { ...parsed, roomMapImage: null, roomMapPreviewUrl: null, gridSettings: savedGrid || gridDefaults };
       }
     } catch {
       // Ignore parse errors
     }
-    return { config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null, canvasMode: 'roomz' as CanvasMode };
+    return { config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null, gridSettings: { snapToGrid: false, gridSize: 1, showGrid: false } };
   });
 
   const saveToLocalStorage = useCallback((config: ConfigModel) => {
@@ -146,10 +146,10 @@ export function useEditorStore() {
         }),
       };
 
-      setState(prev => ({ ...prev, config, canvasMode: 'roomz' as CanvasMode }));
+      setState(prev => ({ ...prev, config }));
     } catch (err) {
       console.error('Failed to parse XML:', err);
-      setState(prev => ({ ...prev, config: createEmptyConfig(), canvasMode: 'roomz' as CanvasMode }));
+      setState(prev => ({ ...prev, config: createEmptyConfig() }));
     }
   }, []);
 
@@ -382,7 +382,7 @@ export function useEditorStore() {
     if (state.roomMapPreviewUrl) {
       URL.revokeObjectURL(state.roomMapPreviewUrl);
     }
-    setState({ config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null, canvasMode: 'roomz' as CanvasMode });
+    setState({ config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null, gridSettings: { snapToGrid: false, gridSize: 1, showGrid: false } });
   }, [state.roomMapPreviewUrl]);
 
   const setSelectedScenarioId = useCallback((id: string | null) => {
@@ -416,8 +416,18 @@ export function useEditorStore() {
     setState(prev => ({ ...prev, dragState: prev.dragState ? mergeState(prev.dragState, state) : state as { isDragging: boolean; draggedMarkerId: string | null; startMouseX: number; startMouseY: number } | null }));
   }, []);
 
-  const toggleCanvasMode = useCallback(() => {
-    setState(prev => ({ ...prev, canvasMode: prev.canvasMode === 'roomz' ? 'normal' : 'roomz' }));
+ 
+
+  const setSnapToGrid = useCallback((snapToGrid: boolean) => {
+    setState(prev => ({ ...prev, gridSettings: { ...prev.gridSettings, snapToGrid } }));
+  }, []);
+
+  const setGridSize = useCallback((gridSize: number) => {
+    setState(prev => ({ ...prev, gridSettings: { ...prev.gridSettings, gridSize } }));
+  }, []);
+
+  const setShowGrid = useCallback((showGrid: boolean) => {
+    setState(prev => ({ ...prev, gridSettings: { ...prev.gridSettings, showGrid } }));
   }, []);
 
   useEffect(() => {
@@ -447,7 +457,9 @@ export function useEditorStore() {
     setSelectedMarkerId,
     setDragRoomPos,
     setDragState,
-    toggleCanvasMode,
+    setSnapToGrid,
+    setGridSize,
+    setShowGrid,
   };
 }
 

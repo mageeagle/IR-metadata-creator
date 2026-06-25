@@ -2,9 +2,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react';
 
-import type { ConfigModel, RoomConfig, Position } from '@/lib/types';
-
-type CanvasMode = 'roomz' | 'normal';
+import type { ConfigModel, RoomConfig, Position, GridSettings } from '@/lib/types';
 
 interface EditorState {
   config: ConfigModel | null;
@@ -19,7 +17,6 @@ interface EditorState {
     startMouseX: number;
     startMouseY: number;
   } | null;
-  canvasMode: CanvasMode;
   loadXML: (xmlString: string) => void;
   exportFile: () => unknown;
   addScenario: (name?: string) => void;
@@ -41,7 +38,10 @@ interface EditorState {
   setSelectedMarkerId: (id: string | null) => void;
   setDragRoomPos: (pos: { x: number; y: number } | null) => void;
   setDragState: (state: Partial<{ isDragging: boolean; draggedMarkerId: string | null; startMouseX: number; startMouseY: number }> | null) => void;
-  toggleCanvasMode: () => void;
+  gridSettings: GridSettings;
+  setSnapToGrid: (snapToGrid: boolean) => void;
+  setGridSize: (gridSize: number) => void;
+  setShowGrid: (showGrid: boolean) => void;
 }
 
 function getPixelsPerMeter(room: RoomConfig | undefined, imgNaturalWidth: number, imgNaturalHeight: number): { pxPerMeterX: number; pxPerMeterY: number } {
@@ -60,24 +60,28 @@ function getMarkerCenterPx(
   room: RoomConfig | undefined,
   canvasWidth: number,
   canvasHeight: number,
-  canvasMode: CanvasMode,
   pxPerMeter: { pxPerMeterX: number; pxPerMeterY: number } | null,
 ): { left: string; top: string } {
   if (!room || !pxPerMeter || pxPerMeter.pxPerMeterX === 0 || pxPerMeter.pxPerMeterY === 0) {
     return { left: '0%', top: '0%' };
   }
-  const effectiveOriginX = canvasMode === 'roomz' ? room.originX + room.width / 2 : room.originX;
-  const effectiveOriginY = canvasMode === 'roomz' ? room.originY + room.depth / 2 : room.originY;
+  const effectiveOriginX = room.originX + room.width / 2;
+  const effectiveOriginY = room.originY + room.depth / 2;
   const imgWidth = room.width * pxPerMeter.pxPerMeterX;
   const imgHeight = room.depth * pxPerMeter.pxPerMeterY;
   const imgOffsetX = (canvasWidth - imgWidth) / 2;
   const imgOffsetY = (canvasHeight - imgHeight) / 2;
-  const px = (markerX - effectiveOriginX) * pxPerMeter.pxPerMeterX + imgWidth / 2 + imgOffsetX;
-  const py = -(markerY - effectiveOriginY) * pxPerMeter.pxPerMeterY + imgHeight / 2 + imgOffsetY;
+  const px = (markerX - effectiveOriginX + room.width / 2) * pxPerMeter.pxPerMeterX + imgWidth / 2 + imgOffsetX;
+  const py = -(markerY - effectiveOriginY + room.depth / 2) * pxPerMeter.pxPerMeterY + imgHeight / 2 + imgOffsetY;
   return {
     left: `${(px / canvasWidth) * 100}%`,
     top: `${(py / canvasHeight) * 100}%`,
   };
+}
+
+function snapToGrid(value: number, gridSize: number): number {
+  if (gridSize <= 0) return value;
+  return Math.round(value / gridSize) * gridSize;
 }
 
 function Canvas({
@@ -94,8 +98,10 @@ function Canvas({
   setSelectedMarkerId,
   setDragRoomPos,
   setDragState,
-  canvasMode,
-  toggleCanvasMode,
+  gridSettings,
+  setSnapToGrid,
+  setGridSize,
+  setShowGrid,
 }: EditorState) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -111,7 +117,17 @@ function Canvas({
   const mouseUpRef = useRef<(() => void) | null>(null);
 
   const room = config?.room;
-  const pxPerMeter = scaleFactor ? { pxPerMeterX: scaleFactor, pxPerMeterY: scaleFactor } : getPixelsPerMeter(room, imgNaturalSize?.width ?? 0, imgNaturalSize?.height ?? 0);
+  const rawPxPerMeter = scaleFactor ? { pxPerMeterX: scaleFactor, pxPerMeterY: scaleFactor } : getPixelsPerMeter(room, imgNaturalSize?.width ?? 0, imgNaturalSize?.height ?? 0);
+  const pxPerMeter = rawPxPerMeter.pxPerMeterX > 0 && rawPxPerMeter.pxPerMeterY > 0 ? rawPxPerMeter : (() => {
+    if (!room || !isFinite(room.width) || !isFinite(room.depth) || room.width <= 0 || room.depth <= 0) return { pxPerMeterX: 1, pxPerMeterY: 1 };
+    const pad = 0.95;
+    const cx = containerSize.width * pad;
+    const cy = containerSize.height * pad;
+    const sx = cx / room.width;
+    const sy = cy / room.depth;
+    const s = Math.min(sx, sy);
+    return { pxPerMeterX: s, pxPerMeterY: s };
+  })();
 
   // Measure container size
   useEffect(() => {
@@ -152,11 +168,15 @@ function Canvas({
           const imgOffsetY = (canvasHeight - imgHeight) / 2;
           const px = relX - imgWidth / 2 - imgOffsetX;
           const py = relY - imgHeight / 2 - imgOffsetY;
-          const effectiveOriginX = canvasMode === 'roomz' ? room.originX + room.width / 2 : room.originX;
-          const effectiveOriginY = canvasMode === 'roomz' ? room.originY + room.depth / 2 : room.originY;
-          const roomPos = { x: px / pxPerMeter.pxPerMeterX + effectiveOriginX, y: -py / pxPerMeter.pxPerMeterY + effectiveOriginY };
-          dragRoomRef.current = roomPos;
-          setDragRoomPos(roomPos);
+          const effectiveOriginX = room.originX + room.width / 2;
+          const effectiveOriginY = room.originY + room.depth / 2;
+           const roomPos = { x: px / pxPerMeter.pxPerMeterX + effectiveOriginX - room.width / 2, y: -py / pxPerMeter.pxPerMeterY + effectiveOriginY - room.depth / 2 };
+             if (gridSettings.snapToGrid) {
+              roomPos.x = snapToGrid(roomPos.x, gridSettings.gridSize);
+              roomPos.y = snapToGrid(roomPos.y, gridSettings.gridSize);
+            }
+           dragRoomRef.current = roomPos;
+           setDragRoomPos(roomPos);
         } else {
           dragRoomRef.current = null;
           setDragRoomPos(null);
@@ -166,19 +186,21 @@ function Canvas({
         setDragRoomPos(null);
       }
     },
-    [room, setDragState, setDragRoomPos, pxPerMeter],
+    [room, setDragState, setDragRoomPos, pxPerMeter, gridSettings],
   );
 
   const handleMouseUp = useCallback(() => {
     const drag = dragRef.current;
     const roomPos = dragRoomRef.current;
     if (drag?.draggedMarkerId && roomPos) {
+      const snappedX = gridSettings.snapToGrid ? snapToGrid(roomPos.x, gridSettings.gridSize) : roomPos.x;
+      const snappedY = gridSettings.snapToGrid ? snapToGrid(roomPos.y, gridSettings.gridSize) : roomPos.y;
       const [sid, mid] = drag.draggedMarkerId.split('::');
       if (sid && mid) {
         if (drag.isLocked) {
-          updateLockedPosition(sid, mid, { x: roomPos.x, y: roomPos.y });
+          updateLockedPosition(sid, mid, { x: snappedX, y: snappedY });
         } else {
-          updatePosition(sid, mid, { x: roomPos.x,y: roomPos.y });
+          updatePosition(sid, mid, { x: snappedX, y: snappedY });
         }
       }
     }
@@ -191,7 +213,7 @@ function Canvas({
     if (mouseUpRef.current) {
       document.removeEventListener('mouseup', mouseUpRef.current);
     }
-  }, [updatePosition, updateLockedPosition, setDragState, setDragRoomPos, handleMouseMove]);
+  }, [updatePosition, updateLockedPosition, setDragState, setDragRoomPos, handleMouseMove, gridSettings]);
 
   mouseUpRef.current = handleMouseUp;
 
@@ -299,17 +321,27 @@ function Canvas({
           >
             + Receiver
           </button>
-          <div className="flex items-center bg-gray-700 rounded shadow">
-            <button
-              onClick={toggleCanvasMode}
-              className="cursor-pointer px-2.5 py-1 bg-gray-600 text-white text-xs font-medium rounded-l hover:bg-gray-700 transition-colors border-r border-gray-500"
-            >
-              Change Origin Mode
-            </button>
-            <span className="px-2.5 py-1 text-xs text-gray-200 font-medium">
-              {canvasMode === 'roomz' ? 'Origin: Bottom-Left' : 'Origin: Center'}
-            </span>
-          </div>
+          <button
+            onClick={() => setSnapToGrid(!gridSettings.snapToGrid)}
+            className={`px-2.5 py-1 text-xs font-medium rounded shadow transition-colors ${gridSettings.snapToGrid ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-600 text-white hover:bg-gray-700'}`}
+          >
+            Snap: {gridSettings.snapToGrid ? 'ON' : 'OFF'}
+          </button>
+          <input
+            type="number"
+            value={gridSettings.gridSize}
+            onChange={(e) => setGridSize(parseFloat(e.target.value) || 1)}
+            min={0.1}
+            step={0.1}
+            className="w-16 px-1.5 py-1 bg-gray-700 border border-gray-500 rounded text-xs text-white text-center"
+          />
+          <button
+            onClick={() => setShowGrid(!gridSettings.showGrid)}
+            className={`px-2.5 py-1 text-xs font-medium rounded shadow transition-colors ${gridSettings.showGrid ? 'bg-blue-500 text-white hover:bg-blue-600' : 'bg-gray-600 text-white hover:bg-gray-700'}`}
+          >
+            Grid: {gridSettings.showGrid ? 'ON' : 'OFF'}
+          </button>
+ 
         </div>
       )}
 
@@ -433,20 +465,32 @@ function Canvas({
         )}
 
         {/* Grid overlay */}
-        {room && (
-          <svg
-            className="absolute inset-0 w-full h-full opacity-[0.12] pointer-events-none"
-            xmlns="http://www.w3.org/2000/svg"
-          >
-            <defs>
-              <pattern id="canvas-grid" width="25%" height="25%" patternUnits="objectBoundingBox">
-                <rect x="0.75" y="0" width="0.25" height="1" fill="white" />
-                <rect x="0" y="0.75" width="1" height="0.25" fill="white" />
-              </pattern>
-            </defs>
-            <rect width="100%" height="100%" fill="url(#canvas-grid)" />
-          </svg>
-        )}
+      {room && gridSettings.showGrid && containerSize.width > 0 && containerSize.height > 0 && (() => {
+          const gridPxX = gridSettings.gridSize * pxPerMeter.pxPerMeterX;
+          const gridPxY = gridSettings.gridSize * pxPerMeter.pxPerMeterY;
+          const gridColor = 'rgba(100, 100, 100, 0.6)';
+          const imgW = room.width * pxPerMeter.pxPerMeterX;
+          const imgH = room.depth * pxPerMeter.pxPerMeterY;
+          const imgOffsetX = (containerSize.width - imgW) / 2;
+          const imgOffsetY = (containerSize.height - imgH) / 2;
+          const effectiveOriginX = room.originX + room.width / 2;
+          const effectiveOriginY = room.originY + room.depth / 2;
+          const originX = imgOffsetX + (effectiveOriginX - room.originX + room.width / 2) * pxPerMeter.pxPerMeterX;
+          const originY = imgOffsetY + (effectiveOriginY - room.originY + room.depth / 2) * pxPerMeter.pxPerMeterY;
+          const gridOffsetX = originX % gridPxX;
+          const gridOffsetY = originY % gridPxY;
+          if (!isFinite(gridPxX) || !isFinite(gridPxY) || !isFinite(gridOffsetX) || !isFinite(gridOffsetY) || gridPxX <= 0 || gridPxY <= 0) return null;
+          return (
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                backgroundImage: `linear-gradient(to right, ${gridColor} 1px, transparent 1px), linear-gradient(to bottom, ${gridColor} 1px, transparent 1px)`,
+                backgroundSize: `${gridPxX}px ${gridPxY}px`,
+                backgroundPosition: `${gridOffsetX}px ${gridOffsetY}px`,
+              }}
+            />
+          );
+        })()}
 
         {/* Markers */}
         {selectedScenario && room && (
@@ -459,7 +503,6 @@ function Canvas({
                  room,
                  containerSize.width,
                  containerSize.height,
-                 canvasMode,
                  pxPerMeter,
                );
               const markerId = `${selectedScenarioId}::${source.id}`;
@@ -471,7 +514,7 @@ function Canvas({
                 finalX = dragRoomRef.current.x;
                 finalY = dragRoomRef.current.y;
               }
-              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode, pxPerMeter);
+              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, pxPerMeter);
 
               return (
                 <div
@@ -508,7 +551,6 @@ function Canvas({
                 room,
                 containerSize.width,
                 containerSize.height,
-                canvasMode,
                 pxPerMeter,
               );
               const markerId = `${selectedScenarioId}::${receiver.id}`;
@@ -520,7 +562,7 @@ function Canvas({
                 finalX = dragRoomRef.current.x;
                 finalY = dragRoomRef.current.y;
               }
-              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode, pxPerMeter);
+              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, pxPerMeter);
 
               return (
                 <div
@@ -560,7 +602,7 @@ function Canvas({
                 finalX = dragRoomRef.current.x;
                 finalY = dragRoomRef.current.y;
               }
-              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode, pxPerMeter);
+              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, pxPerMeter);
 
               return (
                 <div
@@ -600,7 +642,7 @@ function Canvas({
                 finalX = dragRoomRef.current.x;
                 finalY = dragRoomRef.current.y;
               }
-              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, canvasMode, pxPerMeter);
+              const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, pxPerMeter);
 
               return (
                 <div

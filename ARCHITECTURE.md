@@ -98,6 +98,12 @@ interface ConfigModel {
 }
 
 type BulkLoadTarget = 'sources' | 'receivers';
+
+interface GridSettings {
+  snapToGrid: boolean;
+  gridSize: number;      // in meters
+  showGrid: boolean;
+}
 ```
 
 ### ID Convention
@@ -129,7 +135,7 @@ interface EditorState {
     startMouseY: number;
     isLocked: boolean;
   } | null;
-  canvasMode: 'roomz' | 'normal';
+  gridSettings: GridSettings;
 }
 ```
 
@@ -143,7 +149,7 @@ interface EditorState {
 | `selectedMarkerId` | `string \| null` | Currently selected marker (shows properties) |
 | `dragRoomPos` | `{x,y} \| null` | Live room coordinates during drag |
 | `dragState` | `{isDragging, draggedMarkerId, startMouseX, startMouseY, isLocked} \| null` | Drag state for UI feedback; `isLocked` indicates if the dragged marker is a locked scenario marker |
-| `canvasMode` | `'roomz' \| 'normal'` | Origin mode toggle (bottom-left vs center), persisted in localStorage |
+| `gridSettings` | `GridSettings` | Grid settings: snapToGrid, gridSize (meters), showGrid — persisted in localStorage |
 
 ### localStorage Key
 
@@ -152,7 +158,6 @@ const STORAGE_KEY = 'room-z-preset-maker';
 ```
 
 Auto-saves `config` to localStorage on every change.
-`canvasMode` is also persisted in localStorage and loaded on app start.
 
 ### Key Store Methods
 
@@ -179,7 +184,9 @@ Auto-saves `config` to localStorage on every change.
 | `setSelectedMarkerId(id)` | Select marker |
 | `setDragRoomPos(pos)` | Update live drag position |
 | `setDragState(state)` | Update drag state |
-| `toggleCanvasMode()` | Toggle origin mode, persisted in localStorage |
+| `setSnapToGrid(val)` | Enable/disable grid snapping |
+| `setGridSize(size)` | Set grid size in meters |
+| `setShowGrid(val)` | Show/hide grid overlay |
 
 ---
 
@@ -196,17 +203,12 @@ const scaleFactor = meters / pixelDist;  // meters per pixel
 
 The scale factor is applied to all marker positioning and drag coordinate calculations. The formula is inverted for display: `pixels / meters` for intuitive understanding.
 
-### Roomz Mode (Default)
+### Center Origin Mode (Default)
 
-- **Origin:** Bottom-left corner of the room
-- **Room bounds:** X: `originX` to `originX + width`, Y: `originY` to `originY + depth`
+- **Origin:** Center of the room (`originX`, `originY`)
+- **Room bounds:** X: `originX - width/2` to `originX + width/2`, Y: `originY - depth/2` to `originY + depth/2`
 - **Y positive:** Points toward North (top of canvas)
 - **Y negative:** Points toward South (bottom of canvas)
-
-### Normal Mode
-
-- **Origin:** Center of the room
-- **Room bounds:** X: `originX - width/2` to `originX + width/2`, Y: `originY - depth/2` to `originY + depth/2`
 
 ### Pixel-to-Coordinate Mapping
 
@@ -222,14 +224,14 @@ const imgOffsetY = (canvasHeight - imgHeight) / 2;
 // Canvas pixel → Room coordinate
 const px = relX - imgWidth / 2 - imgOffsetX;
 const py = relY - imgHeight / 2 - imgOffsetY;
-const effectiveOriginX = canvasMode === 'roomz' ? room.originX + room.width / 2 : room.originX;
-const effectiveOriginY = canvasMode === 'roomz' ? room.originY + room.depth / 2 : room.originY;
+const effectiveOriginX = room.originX + room.width / 2;
+const effectiveOriginY = room.originY + room.depth / 2;
 const roomX = px / pxPerMeter + effectiveOriginX;
 const roomY = -py / pxPerMeter + effectiveOriginY;
 
 // Room coordinate → Canvas pixel
-const px = (markerX - effectiveOriginX) * pxPerMeter + imgWidth / 2 + imgOffsetX;
-const py = -(markerY - effectiveOriginY) * pxPerMeter + imgHeight / 2 + imgOffsetY;
+const px = (markerX - effectiveOriginX + room.width / 2) * pxPerMeter + imgWidth / 2 + imgOffsetX;
+const py = -(markerY - effectiveOriginY + room.depth / 2) * pxPerMeter + imgHeight / 2 + imgOffsetY;
 ```
 
 Without scale factor (fallback):
@@ -237,14 +239,48 @@ Without scale factor (fallback):
 // Canvas pixel → Room coordinate
 const pixelsPerX = canvasWidth / room.width;
 const pixelsPerY = canvasHeight / room.depth;
-const effectiveOriginX = canvasMode === 'roomz' ? room.originX + room.width / 2 : room.originX;
-const effectiveOriginY = canvasMode === 'roomz' ? room.originY + room.depth / 2 : room.originY;
+const effectiveOriginX = room.originX + room.width / 2;
+const effectiveOriginY = room.originY + room.depth / 2;
 const roomX = (relX - canvasWidth / 2) / pixelsPerX + effectiveOriginX;
 const roomY = -(relY - canvasHeight / 2) / pixelsPerY + effectiveOriginY;
 
 // Room coordinate → Canvas pixel
-const px = (markerX - effectiveOriginX) * pixelsPerX + canvasWidth / 2;
-const py = -(markerY - effectiveOriginY) * pixelsPerY + canvasHeight / 2;
+const px = (markerX - effectiveOriginX + room.width / 2) * pixelsPerX + canvasWidth / 2;
+const py = -(markerY - effectiveOriginY + room.depth / 2) * pixelsPerY + canvasHeight / 2;
+```
+
+### Grid Scaling
+
+The grid overlay renders as a CSS `backgroundImage` with gradients. Grid spacing scales with the image scale factor:
+
+```typescript
+// 1. pxPerMeter — how many CSS pixels = 1 meter
+pxPerMeterX = containerWidth / roomWidth
+pxPerMeterY = containerHeight / roomDepth
+
+// 2. Grid line spacing in pixels
+gridPxX = gridSize * pxPerMeterX
+gridPxY = gridSize * pxPerMeterY
+
+// 3. Origin position in container (where room's logical origin sits)
+imgOffsetX = (containerWidth - roomWidth * pxPerMeterX) / 2
+effectiveOriginX = room.originX + room.width / 2
+originX = imgOffsetX + (effectiveOriginX - room.originX + room.width / 2) * pxPerMeterX
+
+// 4. Align grid lines with snap positions
+gridOffsetX = originX % gridPxX
+gridOffsetY = originY % gridPxY
+
+// 5. CSS rendering
+backgroundSize: ${gridPxX}px ${gridPxY}px
+backgroundPosition: ${gridOffsetX}px ${gridOffsetY}px
+```
+
+**Key point:** The grid uses the same `pxPerMeter` as the markers, so they align. The `object-contain` scaling of the `<img>` doesn't affect the grid because `pxPerMeter` is calculated from the *rendered* image dimensions (via `onLoad`), which already includes the CSS scaling.
+
+**Default scale:** When no manual scale is set, the room is fitted to the container with 5% padding:
+```typescript
+const defaultScale = Math.min(containerWidth / roomWidth, containerHeight / roomDepth) * 0.95;
 ```
 
 ---
@@ -275,6 +311,11 @@ const py = -(markerY - effectiveOriginY) * pixelsPerY + canvasHeight / 2;
 5. **Bulk Load:** CSV textarea for bulk importing positions
 6. **Scenarios:** List with selection, locked mode badges (S/R), source/receiver counts, delete buttons
 7. **Add Scenario:** Button to create new scenario
+
+**PropertiesPanel (Right Panel) Layout when no marker selected:**
+- **Sources:** Combined list of all sources (locked sources first, then moving sources) under a single "Sources" header
+- **Receivers:** Moving receivers under a "Receivers" header
+- **Add buttons:** "+ Add Source" and "+ Add Receiver" at the bottom
 
 **State:**
 - `bulkTarget`: `'sources' | 'receivers'` — which type to bulk-load
@@ -333,26 +374,30 @@ const [scaleFactor, setScaleFactor] = useState<number | null>(null);
 | Function | Purpose |
 |----------|---------|
 | `getPixelsPerMeter(room, imgNaturalWidth, imgNaturalHeight)` | Calculates pixels per meter for scaling |
-| `getMarkerCenterPx(markerX, markerY, room, canvasWidth, canvasHeight, canvasMode, pxPerMeter)` | Converts room coordinates to CSS `left`/`top` percentages using scale factor |
+| `getMarkerCenterPx(markerX, markerY, room, canvasWidth, canvasHeight, pxPerMeter)` | Converts room coordinates to CSS `left`/`top` percentages using scale factor |
 | `handleMouseMove(e)` | Updates drag state and live room position during drag, uses scale factor |
 | `handleMouseUp()` | Commits final position, removes event listeners |
 | `handleMouseDown(markerId, scenarioId)` | Starts drag, selects marker, adds event listeners |
 | `handleAddSource()` | Adds source at room center |
 | `handleAddReceiver()` | Adds receiver at room center |
-| `toggleCanvasMode()` | Toggles origin mode |
 
 **Canvas toolbar buttons:**
 - **"Set Scale"**: Activates scale mode for manual image scaling
-- **"Change Origin Mode"** button: Toggles between bottom-left and center origin
-- Adjacent pill shows current mode: "Origin: Bottom-left" (RoomZ) or "Origin: Center" (Normal)
-- Pill styling: dark background (`bg-gray-700`), gray-200 text, rounded corners
-- Right padding on mode label: `px-2.5` for proper spacing
+- **"Snap to Grid"** toggle: Enable/disable grid snapping
+- **"Grid Size"** input: Set grid spacing in meters (default 0.5)
+- **"Show Grid"** toggle: Show/hide grid overlay
 
 **Scale mode UI:**
 - Appears below toolbar buttons when scale mode is active
 - Shows prompt: "Click first point" → "Click second point" → input field with "Apply"/"Reset"/"Done" buttons
-- Red dot for first point, blue dot for second point, dashed white line between them
-- Pixel distance shown next to prompt during second point selection
+- Red dot for first point, blue dot for second point, dashed white in second point selection
+
+**Grid overlay:**
+- Rendered as CSS `backgroundImage` with linear gradients
+- Grid size in meters (default 0.5m), scales with image scale factor
+- Grid lines aligned to snap positions using modulo of origin position
+- Visible in both light and dark modes (gray `rgba(100, 100, 100, 0.6)`)
+- Toggle via toolbar button, size via input field
 
 **Marker rendering:**
 - All markers use indexed labels (S1, S2, R1, R2) based on array position (1-based)
@@ -379,6 +424,13 @@ const [scaleFactor, setScaleFactor] = useState<number | null>(null);
 **Role:** Edit properties of selected marker or all markers
 
 **Scenario settings:** Includes a "Locked Type" dropdown that allows setting the scenario's locked mode (`source`, `receiver`, or `none`) as metadata for XML export.
+
+**Layout when no marker is selected:**
+- All sources (locked + moving) are displayed under a single "Sources" header in one unified section
+- Moving receivers are displayed under a "Receivers" header
+- Locked sources appear before moving sources within the combined section
+- Each locked source uses `LockedSourceCard` (yellow-tinted, no remove button)
+- Each moving source uses `MovingSourceCard` (white, with remove button)
 
 **Input props:**
 ```typescript
@@ -595,18 +647,13 @@ mouseup → remove listeners, commit position to store, clear refs
 
 **Solution:** Each marker's `onClick` calls `setSelectedMarkerId(markerId)` unconditionally (no toggle). Background click unselects via `setSelectedMarkerId(null)`.
 
-### Origin Mode Toggle
+### Center Origin (Default)
 
-**Roomz mode:** Origin at bottom-left corner
+The origin is always centered on the room. The effective origin accounts for the offset between the room's logical origin and the image center:
 ```typescript
 effectiveOriginX = room.originX + room.width / 2;
 effectiveOriginY = room.originY + room.depth / 2;
-```
-
-**Normal mode:** Origin at center
-```typescript
-effectiveOriginX = room.originX;
-effectiveOriginY = room.originY;
+// All coordinate conversions include ±room.width/2 or ±room.depth/2 adjustments
 ```
 
 ### XML Attribute Prefix Handling
@@ -669,7 +716,7 @@ Tests XML serialization round-trip: parse → serialize → parse should produce
 1. **Undo/Redo:** Not implemented — could add command pattern to store
 2. **Keyboard shortcuts:** Not implemented — could add global listener
 3. **Drag threshold:** Currently 3px — could make configurable
-4. **Grid snapping:** Not implemented — could add to `handleMouseMove`
+4. **Grid snapping:** Implemented — snap positions aligned with grid lines using modulo of origin position
 5. **Zoom/Pan:** Not implemented — canvas uses percentage-based positioning
 6. **Dark mode:** Already supported via Tailwind `dark:` variants
 7. **i18n:** Not implemented — all labels are English
