@@ -428,6 +428,7 @@ function Canvas({
         {/* Room map image */}
         {roomMapPreviewUrl && (
           <div className="absolute inset-0 w-full h-full" style={{ pointerEvents: scaleMode !== 'off' ? 'none' : 'auto' }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={roomMapPreviewUrl}
               alt="Room map"
