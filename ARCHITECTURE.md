@@ -324,8 +324,7 @@ const defaultScale = Math.min(containerWidth / roomWidth, containerHeight / room
 1. **Header Toolbar:** Import XML, Export XML, Clear All
 2. **Room Map:** File input for room map image (JPG/PNG/WebP) with drag-and-drop support
 3. **Room Dimensions:** Width, Length (Y-axis), Height (Z-axis) inputs — all in a 3-column grid; Origin X/Y/Z also in a 3-column grid
-4. **Info:** Free-form text area
-5. **Acoustic Metadata:** Collapsible section with 9 fields (mic/spk elevation, model/type, IR method, sweep settings, space materials, geometry)
+4. **Acoustic Metadata:** Collapsible section with all metadata fields (mic/spk elevation, model/type, IR method, sweep settings, space materials, geometry, and Space Info)
 6. **Bulk Load:** CSV textarea for bulk importing positions
 6. **Scenarios:** List with selection, locked mode badges (S/R), source/receiver counts, delete buttons
 7. **Add Scenario:** Button to create new scenario
@@ -347,7 +346,7 @@ const defaultScale = Math.min(containerWidth / roomWidth, containerHeight / room
 
 **Acoustic Metadata Section**
 
-A collapsible section that appears after the "Space Info" section. Contains 9 fields:
+A collapsible section containing all metadata fields:
 - **Mic Elevation (m):** Number input for microphone height
 - **Mic Model/Type:** Text input for microphone identification
 - **Spk Elevation (m):** Number input for speaker height
@@ -357,6 +356,7 @@ A collapsible section that appears after the "Space Info" section. Contains 9 fi
 - **Sweep Freq Start (Hz):** Number input (visible when IR Method = Sine Sweep)
 - **Space Materials:** Textarea for room materials description
 - **Space Geometry:** Textarea for room shape/dimensions description
+- **Space Info:** Free-form text area (moved from standalone section into accordion)
 
 The section is collapsed by default and expands when the header is clicked.
 
