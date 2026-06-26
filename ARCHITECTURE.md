@@ -1,4 +1,4 @@
-# Room Z Preset Maker — Architecture & Design Document
+# IR Metadata Creator — Architecture & Design Document
 
 ## Overview
 
@@ -11,7 +11,7 @@ A browser-based desktop application for creating and editing Roomz `config.xml` 
 ## Project Structure
 
 ```
-room-z-preset-maker/
+ir-metadata-creator/
 ├── app/
 │   └── page.tsx              # Root layout — 3-panel layout, wires store to all panels
 ├── lib/
@@ -170,7 +170,7 @@ interface EditorState {
 ### localStorage Key
 
 ```typescript
-const STORAGE_KEY = 'room-z-preset-maker';
+const STORAGE_KEY = 'ir-metadata-creator';
 ```
 
 Auto-saves `config` to localStorage on every change.
