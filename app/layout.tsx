@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Room-Z Preset Maker",
-  description: "Create and edit Roomz preset configuration files.",
+  title: "IR Metadata Creator",
+  description: "Visual editor for Impulse Response metadata — place sources and receivers on room maps with positioning.",
 };
 
 export default function RootLayout({
