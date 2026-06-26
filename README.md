@@ -1,6 +1,6 @@
 # IR Metadata Creator
 
-A browser-based desktop application for creating and editing Roomz `config.xml` files. Place sources and receivers on a room map image with full 3D position and rotation control, organized into multiple scenarios.
+A browser-based desktop application for creating and editing Roomz `config.xml` files. Place sources and receivers on a room map image with full 3D position and rotation control, organized into multiple scenarios. Compatible with the [Room-Z Plugin](https://roomz.dalembert.upmc.fr/).
 
 ---
 
@@ -8,7 +8,7 @@ A browser-based desktop application for creating and editing Roomz `config.xml` 
 
 ### 1. Import or Start Fresh
 
-Click **Import XML** in the sidebar to load an existing `config.xml` file, or start with a blank canvas.
+Click **Import XML** in the sidebar to load a `config.xml` file for the Room-Z plugin, or **Import JSON** to restore a previous editor session. Start with a blank canvas if you prefer.
 
 ### 2. Upload a Room Map
 
@@ -41,14 +41,14 @@ For each source or receiver:
 
 ### 8. Export
 
-Click **Export XML** in the sidebar to download the `config.xml` file.
+Click **Export XML** in the sidebar to download the `config.xml` file for the Room-Z plugin, or **Export JSON** to save your full editor state for future use.
 
 ---
 
 ## Features
 
-- **Import/Export XML** — Load and save Roomz `config.xml` files
-- **Import/Export JSON** — Save and restore full editor state including grid settings and scale factor
+- **Import/Export XML** — Import `config.xml` files for the [Room-Z Plugin](https://roomz.dalembert.upmc.fr/) and export for use with the plugin
+- **Import/Export JSON** — Save and restore full editor state including grid settings and scale factor (for future libraries or plugins)
 - **Drag-and-drop room map** — Upload images by browsing or dragging
 - **Manual image scaling** — Define real-world distances on the image for accurate positioning
 - **Grid overlay** — Show/hide grid lines with adjustable spacing (default 0.5m)
