@@ -127,8 +127,8 @@ export default function Sidebar(props: EditorState) {
 
   const handleInfoChange = useCallback((value: string) => {
     setInfoData(value);
-    setInfo({ data: value } as InfoText);
-  }, [setInfo]);
+    setInfo({ ...acousticMeta, data: value } as InfoText);
+  }, [setInfo, acousticMeta]);
 
   useEffect(() => {
     if (config?.info) {
