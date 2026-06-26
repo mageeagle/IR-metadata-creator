@@ -154,8 +154,8 @@ export default function Sidebar(props: EditorState) {
   const handleAcousticChange = useCallback(<K extends keyof InfoText>(field: K, value: InfoText[K]) => {
     const updated = { ...acousticMeta, [field]: value };
     setAcousticMeta(updated);
-    setInfo({ ...updated } as InfoText);
-  }, [acousticMeta, setInfo]);
+    setInfo({ ...updated, data: infoData } as InfoText);
+  }, [acousticMeta, setInfo, infoData]);
 
   const handleRemoveRoomMap = useCallback(() => {
     loadRoomMap(new File([''], '', { type: 'image/png' }));
