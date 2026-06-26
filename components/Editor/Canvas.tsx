@@ -47,14 +47,23 @@ interface EditorState {
   setScaleFactor?: (value: number | null) => void;
 }
 
-function getPixelsPerMeter(room: RoomConfig | undefined, imgNaturalWidth: number, imgNaturalHeight: number): { pxPerMeterX: number; pxPerMeterY: number } {
+function getPixelsPerMeter(room: RoomConfig | undefined, imgNaturalWidth: number, imgNaturalHeight: number, canvasWidth?: number, canvasHeight?: number): { pxPerMeterX: number; pxPerMeterY: number } {
   if (!room || !isFinite(room.width) || !isFinite(room.depth) || room.width <= 0 || room.depth <= 0) {
     return { pxPerMeterX: 0, pxPerMeterY: 0 };
   }
-  return {
-    pxPerMeterX: imgNaturalWidth / room.width,
-    pxPerMeterY: imgNaturalHeight / room.depth,
-  };
+  if (imgNaturalWidth > 0 && imgNaturalHeight > 0) {
+    return {
+      pxPerMeterX: imgNaturalWidth / room.width,
+      pxPerMeterY: imgNaturalHeight / room.depth,
+    };
+  }
+  if (canvasWidth && canvasHeight) {
+    const pad = 0.95;
+    const sx = (canvasWidth * pad) / room.width;
+    const sy = (canvasHeight * pad) / room.depth;
+    return { pxPerMeterX: sx, pxPerMeterY: sy };
+  }
+  return { pxPerMeterX: 100, pxPerMeterY: 100 };
 }
 
 function getMarkerCenterPx(
@@ -65,7 +74,7 @@ function getMarkerCenterPx(
   canvasHeight: number,
   pxPerMeter: { pxPerMeterX: number; pxPerMeterY: number } | null,
 ): { left: string; top: string } {
-  if (!room || !pxPerMeter || pxPerMeter.pxPerMeterX === 0 || pxPerMeter.pxPerMeterY === 0) {
+  if (!room || !pxPerMeter || !isFinite(pxPerMeter.pxPerMeterX) || !isFinite(pxPerMeter.pxPerMeterY) || pxPerMeter.pxPerMeterX <= 0 || pxPerMeter.pxPerMeterY <= 0 || canvasWidth <= 0 || canvasHeight <= 0) {
     return { left: '0%', top: '0%' };
   }
   const effectiveOriginX = room.originX + room.width / 2;
@@ -121,7 +130,7 @@ function Canvas({
   const mouseUpRef = useRef<(() => void) | null>(null);
 
   const room = config?.room;
-  const rawPxPerMeter = scaleFactor ? { pxPerMeterX: scaleFactor, pxPerMeterY: scaleFactor } : getPixelsPerMeter(room, imgNaturalSize?.width ?? 0, imgNaturalSize?.height ?? 0);
+  const rawPxPerMeter = scaleFactor ? { pxPerMeterX: scaleFactor, pxPerMeterY: scaleFactor } : getPixelsPerMeter(room, imgNaturalSize?.width ?? 0, imgNaturalSize?.height ?? 0, containerSize.width, containerSize.height);
   const pxPerMeter = rawPxPerMeter.pxPerMeterX > 0 && rawPxPerMeter.pxPerMeterY > 0 ? rawPxPerMeter : (() => {
     if (!room || !isFinite(room.width) || !isFinite(room.depth) || room.width <= 0 || room.depth <= 0) return { pxPerMeterX: 1, pxPerMeterY: 1 };
     const pad = 0.95;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { useEditorStore } from '@/store/useEditorStore';
 import Sidebar from '@/components/Editor/Sidebar';
 import Canvas from '@/components/Editor/Canvas';
@@ -8,14 +8,10 @@ import PropertiesPanel from '@/components/Editor/PropertiesPanel';
 
 export default function EditorPage() {
   const state = useEditorStore();
-  const [scaleFactor, setScaleFactor] = useState<number | null>(null);
 
   const handleJsonImported = useCallback((jsonString: string) => {
     const parsed = JSON.parse(jsonString);
     state.importJSON(jsonString);
-    if (parsed.scaleFactor !== undefined) {
-      setScaleFactor(parsed.scaleFactor);
-    }
   }, [state.importJSON]);
 
   return (
@@ -28,8 +24,8 @@ export default function EditorPage() {
         />
         <Canvas
           {...state}
-          scaleFactor={scaleFactor}
-          setScaleFactor={setScaleFactor}
+          scaleFactor={state.scaleFactor}
+          setScaleFactor={state.setScaleFactor}
           onJsonImported={handleJsonImported}
         />
         <PropertiesPanel
@@ -46,8 +42,8 @@ export default function EditorPage() {
         />
         <Canvas
           {...state}
-          scaleFactor={scaleFactor}
-          setScaleFactor={setScaleFactor}
+          scaleFactor={state.scaleFactor}
+          setScaleFactor={state.setScaleFactor}
           onJsonImported={handleJsonImported}
         />
         <PropertiesPanel

@@ -171,7 +171,12 @@ export function useEditorStore() {
         }),
       };
 
-      setState(prev => ({ ...prev, config }));
+     setState(prev => ({
+        ...prev,
+        config,
+        selectedScenarioId: null,
+        selectedMarkerId: null,
+      }));
     } catch (err) {
       console.error('Failed to parse XML:', err);
       setState(prev => ({ ...prev, config: createEmptyConfig() }));
