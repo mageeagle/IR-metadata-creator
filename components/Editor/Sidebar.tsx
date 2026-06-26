@@ -42,7 +42,6 @@ export default function Sidebar(props: EditorState) {
   const [room, setRoomState] = useState<Partial<RoomConfig>>({});
   const [infoData, setInfoData] = useState('');
   const [isAcousticExpanded, setIsAcousticExpanded] = useState(false);
-  const [irMethod, setIrMethod] = useState<'sineSweep' | 'clap' | undefined>(undefined);
   const [acousticMeta, setAcousticMeta] = useState({
     micElevation: undefined as number | undefined,
     micModel: undefined as string | undefined,
@@ -128,15 +127,15 @@ export default function Sidebar(props: EditorState) {
 
   const handleInfoChange = useCallback((value: string) => {
     setInfoData(value);
-    setInfo({ ...acousticMeta, data: value } as InfoText);
-  }, [setInfo, acousticMeta]);
+    setInfo({ data: value } as InfoText);
+  }, [setInfo]);
 
   useEffect(() => {
     if (config?.info) {
       const info = config.info;
       requestAnimationFrame(() => {
         setInfoData(info.data || '');
-        setIrMethod(info.irMethod);
+ 
         setAcousticMeta({
           micElevation: info.micElevation,
           micModel: info.micModel,
@@ -155,12 +154,8 @@ export default function Sidebar(props: EditorState) {
   const handleAcousticChange = useCallback(<K extends keyof InfoText>(field: K, value: InfoText[K]) => {
     const updated = { ...acousticMeta, [field]: value };
     setAcousticMeta(updated);
-    setIrMethod(field === 'irMethod' ? value as 'sineSweep' | 'clap' | undefined : irMethod);
-    if (field === 'data') {
-      setInfoData(value as string);
-    }
     setInfo({ ...updated } as InfoText);
-  }, [acousticMeta, setInfo, irMethod]);
+  }, [acousticMeta, setInfo]);
 
   const handleRemoveRoomMap = useCallback(() => {
     loadRoomMap(new File([''], '', { type: 'image/png' }));
@@ -281,7 +276,7 @@ export default function Sidebar(props: EditorState) {
                 type="number"
                 step="0.1"
                 value={acousticMeta.micElevation ?? ''}
-                onChange={(e) => handleAcousticChange('micElevation', parseFloat(e.target.value) || 0)}
+                onChange={(e) => handleAcousticChange('micElevation', e.target.value === '' ? undefined : parseFloat(e.target.value))}
                 placeholder="0"
                 className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
@@ -292,7 +287,7 @@ export default function Sidebar(props: EditorState) {
                 type="number"
                 step="0.1"
                 value={acousticMeta.spkElevation ?? ''}
-                onChange={(e) => handleAcousticChange('spkElevation', parseFloat(e.target.value) || 0)}
+                onChange={(e) => handleAcousticChange('spkElevation', e.target.value === '' ? undefined : parseFloat(e.target.value))}
                 placeholder="0"
                 className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
@@ -352,7 +347,7 @@ export default function Sidebar(props: EditorState) {
                   type="number"
                   step="1"
                   value={acousticMeta.sweepDuration ?? ''}
-                  onChange={(e) => handleAcousticChange('sweepDuration', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => handleAcousticChange('sweepDuration', e.target.value === '' ? undefined : parseFloat(e.target.value))}
                   placeholder="60"
                   className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
@@ -363,7 +358,7 @@ export default function Sidebar(props: EditorState) {
                   type="number"
                   step="1"
                   value={acousticMeta.sweepFreqStart ?? ''}
-                  onChange={(e) => handleAcousticChange('sweepFreqStart', parseFloat(e.target.value) || 0)}
+                  onChange={(e) => handleAcousticChange('sweepFreqStart', e.target.value === '' ? undefined : parseFloat(e.target.value))}
                   placeholder="20"
                   className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
