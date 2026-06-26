@@ -42,7 +42,9 @@ interface EditorState {
   setSnapToGrid: (snapToGrid: boolean) => void;
   setGridSize: (gridSize: number) => void;
   setShowGrid: (showGrid: boolean) => void;
-  onJsonImported?: () => void;
+  onJsonImported?: (jsonString: string) => void;
+  scaleFactor?: number | null;
+  setScaleFactor?: (value: number | null) => void;
 }
 
 function getPixelsPerMeter(room: RoomConfig | undefined, imgNaturalWidth: number, imgNaturalHeight: number): { pxPerMeterX: number; pxPerMeterY: number } {
@@ -90,8 +92,6 @@ function Canvas({
   roomMapPreviewUrl,
   selectedScenarioId,
   selectedMarkerId,
-  dragRoomPos: storeDragRoomPos,
-  dragState: storeDragState,
   addSource,
   addReceiver,
   updatePosition,
@@ -103,7 +103,6 @@ function Canvas({
   setSnapToGrid,
   setGridSize,
   setShowGrid,
-  onJsonImported,
 }: EditorState) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -113,6 +112,9 @@ function Canvas({
   const [scalePoint2, setScalePoint2] = useState<{ x: number; y: number } | null>(null);
   const [knownDistance, setKnownDistance] = useState<string>('');
   const [scaleFactor, setScaleFactor] = useState<number | null>(null);
+  const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [draggedMarkerId, setDraggedMarkerId] = useState<string | null>(null);
   const didDrag = useRef(false);
   const dragRef = useRef<{ isDragging: boolean; draggedMarkerId: string | null; startMouseX: number; startMouseY: number; isLocked: boolean } | null>(null);
   const dragRoomRef = useRef<{ x: number; y: number } | null>(null);
@@ -177,15 +179,18 @@ function Canvas({
               roomPos.x = snapToGrid(roomPos.x, gridSettings.gridSize);
               roomPos.y = snapToGrid(roomPos.y, gridSettings.gridSize);
             }
-           dragRoomRef.current = roomPos;
-           setDragRoomPos(roomPos);
+          dragRoomRef.current = roomPos;
+            setDragRoomPos(roomPos);
+            setDragPosition(roomPos);
         } else {
           dragRoomRef.current = null;
           setDragRoomPos(null);
+          setDragPosition(null);
         }
       } else {
         dragRoomRef.current = null;
         setDragRoomPos(null);
+        setDragPosition(null);
       }
     },
     [room, setDragState, setDragRoomPos, pxPerMeter, gridSettings],
@@ -211,20 +216,16 @@ function Canvas({
     dragRoomRef.current = null;
     setDragState(null);
     setDragRoomPos(null);
+    setDragPosition(null);
+    setIsDragging(false);
+    setDraggedMarkerId(null);
     document.removeEventListener('mousemove', handleMouseMove);
     if (mouseUpRef.current) {
       document.removeEventListener('mouseup', mouseUpRef.current);
     }
-  }, [updatePosition, updateLockedPosition, setDragState, setDragRoomPos, handleMouseMove, gridSettings]);
+  }, [updatePosition, updateLockedPosition, setDragState, setDragRoomPos, handleMouseMove, gridSettings, mouseUpRef]);
 
-  mouseUpRef.current = handleMouseUp;
-
-  const handleJsonImported = useCallback(() => {
-    setScaleFactor(null);
-    if (onJsonImported) {
-      onJsonImported();
-    }
-  }, [onJsonImported]);
+ 
 
   const selectedScenario = config?.scenarios.find((s) => s.id === selectedScenarioId);
 
@@ -245,12 +246,15 @@ function Canvas({
         isLocked,
       };
       setDragState({ isDragging: true, draggedMarkerId: fullId, startMouseX: e.clientX, startMouseY: e.clientY });
+      setIsDragging(true);
+      setDraggedMarkerId(fullId);
       setSelectedMarkerId(fullId);
       setDragRoomPos(null);
+      mouseUpRef.current = handleMouseUp;
       document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', mouseUpRef.current!);
+      document.addEventListener('mouseup', mouseUpRef.current);
     },
-    [setDragState, setDragRoomPos, handleMouseMove, handleMouseUp, setSelectedMarkerId, config, selectedScenarioId],
+    [setDragState, setDragRoomPos, handleMouseMove, setSelectedMarkerId, selectedScenario, handleMouseUp],
   );
 
   const handleAddSource = useCallback(() => {
@@ -267,13 +271,10 @@ function Canvas({
     addReceiver(selectedScenarioId, { x: centerX, y: centerY, z: 0, rotX: 0, rotY: 0, rotZ: 0 });
   }, [selectedScenarioId, room, addReceiver]);
 
-  // Extract drag position outside render to avoid ref-in-render eslint error
-  let dragX: number | null = null;
-  let dragY: number | null = null;
-  if (dragRef.current?.isDragging && dragRoomRef.current) {
-    dragX = dragRoomRef.current.x;
-    dragY = dragRoomRef.current.y;
-  }
+  // Drag position from state (updated in handleMouseMove, read in render)
+  const currentDragPos = dragPosition;
+  const currentIsDragging = isDragging;
+  const currentDraggedMarkerId = draggedMarkerId;
 
   if (!roomMapPreviewUrl && !room) {
     return (
@@ -501,27 +502,19 @@ function Canvas({
           );
         })()}
 
-        {/* Markers */}
+       {/* Markers */}
         {selectedScenario && room && (
           <>
-            {/* Locked sources */}
+       {/* Locked sources */}
             {selectedScenario.lockedSources.map((source, idx) => {
-              const pos = getMarkerCenterPx(
-                 source.position.x,
-                 source.position.y,
-                 room,
-                 containerSize.width,
-                 containerSize.height,
-                 pxPerMeter,
-               );
               const markerId = `${selectedScenarioId}::${source.id}`;
               const isSelected = selectedMarkerId === markerId;
 
               let finalX = source.position.x;
               let finalY = source.position.y;
-              if (dragRef.current?.isDragging && dragRef.current.draggedMarkerId === markerId && dragRoomRef.current) {
-                finalX = dragRoomRef.current.x;
-                finalY = dragRoomRef.current.y;
+              if (currentIsDragging && currentDraggedMarkerId === markerId && currentDragPos) {
+                finalX = currentDragPos.x;
+                finalY = currentDragPos.y;
               }
               const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, pxPerMeter);
 
@@ -552,24 +545,16 @@ function Canvas({
               );
             })}
 
-            {/* Locked receivers */}
-           {selectedScenario.lockedReceivers.map((receiver, idx) => {
-              const pos = getMarkerCenterPx(
-                receiver.position.x,
-                receiver.position.y,
-                room,
-                containerSize.width,
-                containerSize.height,
-                pxPerMeter,
-              );
+         {/* Locked receivers */}
+            {selectedScenario.lockedReceivers.map((receiver, idx) => {
               const markerId = `${selectedScenarioId}::${receiver.id}`;
               const isSelected = selectedMarkerId === markerId;
 
               let finalX = receiver.position.x;
               let finalY = receiver.position.y;
-              if (dragRef.current?.isDragging && dragRef.current.draggedMarkerId === markerId && dragRoomRef.current) {
-                finalX = dragRoomRef.current.x;
-                finalY = dragRoomRef.current.y;
+              if (currentIsDragging && currentDraggedMarkerId === markerId && currentDragPos) {
+                finalX = currentDragPos.x;
+                finalY = currentDragPos.y;
               }
               const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, pxPerMeter);
 
@@ -601,15 +586,15 @@ function Canvas({
             })}
 
             {/* Sources */}
-          {selectedScenario.sources.map((source, idx) => {
+            {selectedScenario.sources.map((source, idx) => {
               const markerId = `${selectedScenarioId}::${source.id}`;
               const isSelected = selectedMarkerId === markerId;
 
               let finalX = source.position.x;
               let finalY = source.position.y;
-              if (dragRef.current?.isDragging && dragRef.current.draggedMarkerId === markerId && dragRoomRef.current) {
-                finalX = dragRoomRef.current.x;
-                finalY = dragRoomRef.current.y;
+              if (currentIsDragging && currentDraggedMarkerId === markerId && currentDragPos) {
+                finalX = currentDragPos.x;
+                finalY = currentDragPos.y;
               }
               const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, pxPerMeter);
 
@@ -635,21 +620,21 @@ function Canvas({
                     }
                   }}
                 >
-                  S{idx + 1}
+                 S{idx + 1}
                 </div>
               );
             })}
 
             {/* Receivers */}
-          {selectedScenario.receivers.map((receiver, idx) => {
+            {selectedScenario.receivers.map((receiver, idx) => {
               const markerId = `${selectedScenarioId}::${receiver.id}`;
               const isSelected = selectedMarkerId === markerId;
 
               let finalX = receiver.position.x;
               let finalY = receiver.position.y;
-              if (dragRef.current?.isDragging && dragRef.current.draggedMarkerId === markerId && dragRoomRef.current) {
-                finalX = dragRoomRef.current.x;
-                finalY = dragRoomRef.current.y;
+              if (currentIsDragging && currentDraggedMarkerId === markerId && currentDragPos) {
+                finalX = currentDragPos.x;
+                finalY = currentDragPos.y;
               }
               const newPos = getMarkerCenterPx(finalX, finalY, room, containerSize.width, containerSize.height, pxPerMeter);
 
@@ -687,3 +672,5 @@ function Canvas({
 }
 
 export default Canvas;
+
+

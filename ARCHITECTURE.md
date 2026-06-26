@@ -136,6 +136,8 @@ interface EditorState {
     isLocked: boolean;
   } | null;
   gridSettings: GridSettings;
+  scaleFactor?: number | null;
+  setScaleFactor?: (value: number | null) => void;
 }
 ```
 
@@ -150,6 +152,7 @@ interface EditorState {
 | `dragRoomPos` | `{x,y} \| null` | Live room coordinates during drag |
 | `dragState` | `{isDragging, draggedMarkerId, startMouseX, startMouseY, isLocked} \| null` | Drag state for UI feedback; `isLocked` indicates if the dragged marker is a locked scenario marker |
 | `gridSettings` | `GridSettings` | Grid settings: snapToGrid, gridSize (meters), showGrid — persisted in localStorage |
+| `scaleFactor` | `number | null` | Manual image scale factor (meters per pixel) — set via scale tool |
 
 ### localStorage Key
 
@@ -187,6 +190,7 @@ Auto-saves `config` to localStorage on every change.
 | `setSnapToGrid(val)` | Enable/disable grid snapping |
 | `setGridSize(size)` | Set grid size in meters |
 | `setShowGrid(val)` | Show/hide grid overlay |
+| `setScaleFactor(value)` | Set manual image scale factor (meters per pixel) |
 
 ---
 
@@ -340,7 +344,7 @@ const defaultScale = Math.min(containerWidth / roomWidth, containerHeight / room
 **Role:** Visual marker placement and dragging
 
 **Image display:**
-- Uses standard `<img>` tag (not Next.js `next/image`) to avoid blob URL validation issues
+- Uses standard `<img>` tag (not Next.js `next/image`) to avoid blob URL validation issues and keep lint clean
 - Captures natural image dimensions via `onLoad` event (`img.naturalWidth`, `img.naturalHeight`)
 - Image is centered within the container based on aspect ratio
 
@@ -359,6 +363,15 @@ const dragRoomRef = useRef<{ x: number; y: number } | null>(null);
 const mouseUpRef = useRef<(() => void) | null>(null);
 const didDrag = useRef(false);
 ```
+
+**State (React state for drag - updated in render):**
+```typescript
+const [dragPosition, setDragPosition] = useState<{ x: number; y: number } | null>(null);
+const [isDragging, setIsDragging] = useState(false);
+const [draggedMarkerId, setDraggedMarkerId] = useState<string | null>(null);
+```
+
+These React state variables are updated in `handleMouseMove` alongside ref-based tracking, ensuring the latest drag position is available during render for accurate marker positioning.
 
 **State (scale tool):**
 ```typescript
@@ -398,20 +411,23 @@ const [scaleFactor, setScaleFactor] = useState<number | null>(null);
 - Grid lines aligned to snap positions using modulo of origin position
 - Visible in both light and dark modes (gray `rgba(100, 100, 100, 0.6)`)
 - Toggle via toolbar button, size via input field
+- Uses same `pxPerMeter` as markers for alignment
 
 **Marker rendering:**
-- All markers use indexed labels (S1, S2, R1, R2) based on array position (1-based)
+- All markers use indexed labels (S1,S2, R1, R2) based on array position (1-based)
 - Locked sources: Orange circle (`#f59e0b`), 26px diameter, 14px font
 - Locked receivers: Blue circle (`#3b82f6`), 24px diameter, 12px font
 - Moving sources: Orange-red circle (`#f97316`), 26px diameter, 14px font
 - Moving receivers: Blue circle (`#3b82f6`), 24px diameter, 12px font
 - Selected markers: White ring + colored ring (box-shadow)
+- Markers are rendered using direct state access (no IIFE wrappers) for cleaner JSX and proper React reactivity
 
 **Drag behavior:**
 - All markers are freely draggable regardless of locked state
 - Locked markers update their stored position when dragged (via `updateLockedPosition`)
 - Non-locked markers update their stored position (via `updatePosition`)
 - Drag threshold: 3px — must move more than 3px to count as drag vs click
+- Drag position is tracked via both refs (for event handlers) and React state (for render) to ensure markers follow cursor correctly
 
 **Selection behavior:**
 - Clicking a marker selects it (no toggle)
@@ -634,11 +650,15 @@ The drag state needs to be read synchronously during `mousemove` events. Using `
 2. Closure staleness — `useEffect` conditions on `dragRef.current?.isDragging` don't re-trigger when ref changes
 3. Event listener removal issues — `removeEventListener` needs the exact same function reference
 
+**Why React state for drag position?**
+
+The drag position must also be tracked in React state (`dragPosition`, `isDragging`, `draggedMarkerId`) to ensure the latest values are available during render. Reading from refs during render causes stale values (the ref-in-render anti-pattern). The ref is still used for event handler closure safety, but state is updated alongside it in `handleMouseMove` and read in the marker rendering logic.
+
 **Event listener lifecycle:**
 ```
-mousedown → add document 'mousemove' + 'mouseup' listeners
-mousemove → update dragRef.current, setDragState(), setDragRoomPos()
-mouseup → remove listeners, commit position to store, clear refs
+mousedown → assign handleMouseUp to mouseUpRef.current, add document 'mousemove' + 'mouseup' listeners
+mousemove → update dragRef.current, setDragState(), setDragRoomPos(), setDragPosition()
+mouseup → remove listeners, commit position to store, clear refs and state
 ```
 
 ### Selection Persistence

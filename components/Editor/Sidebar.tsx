@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback } from 'react';
 import { serializeConfigToXML } from '@/lib/xml-serializer';
 import type { ConfigModel, RoomConfig, InfoText, Position } from '@/lib/types';
 import { Button } from '@/components/common/Button';
@@ -33,30 +33,13 @@ interface EditorState {
 }
 
 export default function Sidebar(props: EditorState) {
-  const { config, roomMapImage, roomMapPreviewUrl, selectedScenarioId, loadXML, loadRoomMap, exportFile, exportJSON, importJSON, addScenario, deleteScenario, bulkLoad, setRoom, setInfo, clearAll, updateScenario: updateScenarioFn, setSelectedScenarioId } = props;
+  const { config, roomMapPreviewUrl, selectedScenarioId, loadXML, loadRoomMap, exportJSON, importJSON, addScenario, deleteScenario, bulkLoad, setRoom, setInfo, clearAll, setSelectedScenarioId } = props;
   const xmlInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
   const roomMapInputRef = useRef<HTMLInputElement>(null);
   const [bulkTarget, setBulkTarget] = useState<'sources' | 'receivers'>('sources');
   const [bulkText, setBulkText] = useState('');
   const [room, setRoomState] = useState<Partial<RoomConfig>>({});
-  const [localRoomMapPreviewUrl, setLocalRoomMapPreviewUrl] = useState<string | null>(roomMapPreviewUrl);
-  const [localRoomMapImage, setLocalRoomMapImage] = useState<File | null>(roomMapImage);
-
-  // Sync local state with store
-  useEffect(() => {
-    setLocalRoomMapPreviewUrl(roomMapPreviewUrl);
-  }, [roomMapPreviewUrl]);
-  useEffect(() => {
-    setLocalRoomMapImage(roomMapImage);
-  }, [roomMapImage]);
-
-  // Reset room state when config changes (on XML load)
-  useEffect(() => {
-    if (config) {
-      setRoomState({});
-    }
-  }, [config]);
   const [infoData, setInfoData] = useState('');
 
   const handleXmlImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,8 +119,8 @@ export default function Sidebar(props: EditorState) {
   }, [setInfo]);
 
   const handleRemoveRoomMap = useCallback(() => {
-    props.loadRoomMap(new File([''], '', { type: 'image/png' }));
-  }, [props.loadRoomMap]);
+    loadRoomMap(new File([''], '', { type: 'image/png' }));
+  }, [loadRoomMap]);
 
   return (
     <aside className="w-[340px] min-w-[340px] max-w-[340px] border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-y-auto">
@@ -189,7 +172,7 @@ export default function Sidebar(props: EditorState) {
             onChange={handleRoomMapChange}
             className="hidden"
           />
-          {localRoomMapPreviewUrl ? (
+          {roomMapPreviewUrl ? (
             <div className="flex justify-between items-center">
               <p className="text-xs text-green-500 text-center flex-1">Image loaded on canvas</p>
               <button
