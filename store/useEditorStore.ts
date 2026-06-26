@@ -4,7 +4,7 @@ import { parseConfigXML } from '../lib/xml-parser';
 import { serializeConfigToXML } from '../lib/xml-serializer';
 import { exportToJSON, importFromJSON } from '../lib/json-export';
 
-const STORAGE_KEY = 'room-z-preset-maker';
+const STORAGE_KEY = 'ir-metadata-creator';
 
 function generateId(): string {
   return Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
@@ -190,7 +190,7 @@ export function useEditorStore() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'room-z-preset.xml';
+    a.download = 'ir-metadata.xml';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -487,7 +487,7 @@ export function useEditorStore() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'room-z-preset.json';
+    a.download = 'ir-metadata.json';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
