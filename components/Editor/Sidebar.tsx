@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState, useCallback } from 'react';
+import { useRef, useState, useCallback, useEffect } from 'react';
 import { serializeConfigToXML } from '@/lib/xml-serializer';
 import type { ConfigModel, RoomConfig, InfoText, Position } from '@/lib/types';
 import { Button } from '@/components/common/Button';
@@ -41,6 +41,19 @@ export default function Sidebar(props: EditorState) {
   const [bulkText, setBulkText] = useState('');
   const [room, setRoomState] = useState<Partial<RoomConfig>>({});
   const [infoData, setInfoData] = useState('');
+  const [isAcousticExpanded, setIsAcousticExpanded] = useState(false);
+  const [irMethod, setIrMethod] = useState<'sineSweep' | 'clap' | undefined>(undefined);
+  const [acousticMeta, setAcousticMeta] = useState({
+    micElevation: undefined as number | undefined,
+    micModel: undefined as string | undefined,
+    spkElevation: undefined as number | undefined,
+    spkModel: undefined as string | undefined,
+    irMethod: undefined as 'sineSweep' | 'clap' | undefined,
+    sweepDuration: undefined as number | undefined,
+    sweepFreqStart: undefined as number | undefined,
+    spaceMaterials: undefined as string | undefined,
+    roomGeometry: undefined as string | undefined,
+  });
 
   const handleXmlImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -115,8 +128,39 @@ export default function Sidebar(props: EditorState) {
 
   const handleInfoChange = useCallback((value: string) => {
     setInfoData(value);
-    setInfo({ data: value });
-  }, [setInfo]);
+    setInfo({ ...acousticMeta, data: value } as InfoText);
+  }, [setInfo, acousticMeta]);
+
+  useEffect(() => {
+    if (config?.info) {
+      const info = config.info;
+      requestAnimationFrame(() => {
+        setInfoData(info.data || '');
+        setIrMethod(info.irMethod);
+        setAcousticMeta({
+          micElevation: info.micElevation,
+          micModel: info.micModel,
+          spkElevation: info.spkElevation,
+          spkModel: info.spkModel,
+          irMethod: info.irMethod,
+          sweepDuration: info.sweepDuration,
+          sweepFreqStart: info.sweepFreqStart,
+          spaceMaterials: info.spaceMaterials,
+          roomGeometry: info.roomGeometry,
+        });
+      });
+    }
+  }, [config?.info]);
+
+  const handleAcousticChange = useCallback(<K extends keyof InfoText>(field: K, value: InfoText[K]) => {
+    const updated = { ...acousticMeta, [field]: value };
+    setAcousticMeta(updated);
+    setIrMethod(field === 'irMethod' ? value as 'sineSweep' | 'clap' | undefined : irMethod);
+    if (field === 'data') {
+      setInfoData(value as string);
+    }
+    setInfo({ ...updated } as InfoText);
+  }, [acousticMeta, setInfo, irMethod]);
 
   const handleRemoveRoomMap = useCallback(() => {
     loadRoomMap(new File([''], '', { type: 'image/png' }));
@@ -207,8 +251,8 @@ export default function Sidebar(props: EditorState) {
         </>
       )}
 
-      {/* Info Text */}
-      <div className="px-4 pt-3"><h3 className="text-[10px] font-medium tracking-wider uppercase text-gray-500 dark:text-gray-400">Info</h3></div>
+      {/* Space Info */}
+      <div className="px-4 pt-3"><h3 className="text-[10px] font-medium tracking-wider uppercase text-gray-500 dark:text-gray-400">Space Info</h3></div>
       <div className="px-4 pb-2">
         <textarea
           value={infoData}
@@ -217,6 +261,135 @@ export default function Sidebar(props: EditorState) {
           className="w-full px-1.5 py-1.5 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[60px] resize-y"
         />
       </div>
+
+      {/* Acoustic Metadata - Collapsible Section */}
+      <div className="px-4 pt-3">
+        <button
+          onClick={() => setIsAcousticExpanded(!isAcousticExpanded)}
+          className="flex items-center gap-1.5 text-[10px] font-medium tracking-wider uppercase text-gray-500 dark:text-gray-400 cursor-pointer hover:text-gray-700 dark:hover:text-gray-300 transition-colors"
+        >
+          <span className="text-[8px]">{isAcousticExpanded ? '▼' : '▶'}</span>
+          Acoustic Metadata
+        </button>
+      </div>
+      {isAcousticExpanded && (
+        <div className="px-4 pb-2 space-y-1.5">
+          <div className="grid grid-cols-2 gap-1.5">
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-gray-400">Mic Elevation (m)</span>
+              <input
+                type="number"
+                step="0.1"
+                value={acousticMeta.micElevation ?? ''}
+                onChange={(e) => handleAcousticChange('micElevation', parseFloat(e.target.value) || 0)}
+                placeholder="0"
+                className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-gray-400">Spk Elevation (m)</span>
+              <input
+                type="number"
+                step="0.1"
+                value={acousticMeta.spkElevation ?? ''}
+                onChange={(e) => handleAcousticChange('spkElevation', parseFloat(e.target.value) || 0)}
+                placeholder="0"
+                className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-2 gap-1.5">
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-gray-400">Mic Model/Type</span>
+              <input
+                type="text"
+                value={acousticMeta.micModel ?? ''}
+                onChange={(e) => handleAcousticChange('micModel', e.target.value)}
+                placeholder="e.g., Sennheiser MKH 416"
+                className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[10px] uppercase tracking-wider text-gray-400">Spk Model/Type</span>
+              <input
+                type="text"
+                value={acousticMeta.spkModel ?? ''}
+                onChange={(e) => handleAcousticChange('spkModel', e.target.value)}
+                placeholder="e.g., Genelec 8030"
+                className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="radio"
+                name="irMethod"
+                value="sineSweep"
+                checked={acousticMeta.irMethod === 'sineSweep'}
+                onChange={(e) => handleAcousticChange('irMethod', e.target.value as 'sineSweep')}
+                className="w-3.5 h-3.5 accent-blue-500"
+              />
+              <span className="text-xs text-gray-600 dark:text-gray-300">Sine Sweep</span>
+            </label>
+            <label className="flex items-center gap-1.5 cursor-pointer">
+              <input
+                type="radio"
+                name="irMethod"
+                value="clap"
+                checked={acousticMeta.irMethod === 'clap'}
+                onChange={(e) => handleAcousticChange('irMethod', e.target.value as 'clap')}
+                className="w-3.5 h-3.5 accent-blue-500"
+              />
+              <span className="text-xs text-gray-600 dark:text-gray-300">Clap</span>
+            </label>
+          </div>
+          {acousticMeta.irMethod === 'sineSweep' && (
+            <div className="grid grid-cols-2 gap-1.5">
+              <label className="block">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400">Sweep Duration (s)</span>
+                <input
+                  type="number"
+                  step="1"
+                  value={acousticMeta.sweepDuration ?? ''}
+                  onChange={(e) => handleAcousticChange('sweepDuration', parseFloat(e.target.value) || 0)}
+                  placeholder="60"
+                  className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </label>
+              <label className="block">
+                <span className="text-[10px] uppercase tracking-wider text-gray-400">Sweep Freq Start (Hz)</span>
+                <input
+                  type="number"
+                  step="1"
+                  value={acousticMeta.sweepFreqStart ?? ''}
+                  onChange={(e) => handleAcousticChange('sweepFreqStart', parseFloat(e.target.value) || 0)}
+                  placeholder="20"
+                  className="w-full px-1.5 py-1 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </label>
+            </div>
+          )}
+          <label className="block">
+            <span className="text-[10px] uppercase tracking-wider text-gray-400">Space Materials</span>
+            <textarea
+              value={acousticMeta.spaceMaterials ?? ''}
+              onChange={(e) => handleAcousticChange('spaceMaterials', e.target.value)}
+              placeholder="e.g., concrete, wood, glass"
+              className="w-full px-1.5 py-1.5 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[50px] resize-y"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[10px] uppercase tracking-wider text-gray-400">Space Geometry</span>
+            <textarea
+              value={acousticMeta.roomGeometry ?? ''}
+              onChange={(e) => handleAcousticChange('roomGeometry', e.target.value)}
+              placeholder="e.g., rectangular 8m x 6m x 3m"
+              className="w-full px-1.5 py-1.5 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[50px] resize-y"
+            />
+          </label>
+        </div>
+      )}
 
       {/* Bulk Load */}
       {selectedScenarioId && (
