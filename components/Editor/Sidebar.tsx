@@ -246,17 +246,6 @@ export default function Sidebar(props: EditorState) {
         </>
       )}
 
-      {/* Space Info */}
-      <div className="px-4 pt-3"><h3 className="text-[10px] font-medium tracking-wider uppercase text-gray-500 dark:text-gray-400">Space Info</h3></div>
-      <div className="px-4 pb-2">
-        <textarea
-          value={infoData}
-          onChange={(e) => handleInfoChange(e.target.value)}
-          placeholder="Enter info text..."
-          className="w-full px-1.5 py-1.5 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[60px] resize-y"
-        />
-      </div>
-
       {/* Acoustic Metadata - Collapsible Section */}
       <div className="px-4 pt-3">
         <button
@@ -381,6 +370,15 @@ export default function Sidebar(props: EditorState) {
               onChange={(e) => handleAcousticChange('roomGeometry', e.target.value)}
               placeholder="e.g., rectangular 8m x 6m x 3m"
               className="w-full px-1.5 py-1.5 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[50px] resize-y"
+            />
+          </label>
+          <label className="block">
+            <span className="text-[10px] uppercase tracking-wider text-gray-400">Space Info</span>
+            <textarea
+              value={infoData}
+              onChange={(e) => handleInfoChange(e.target.value)}
+              placeholder="Enter info text..."
+              className="w-full px-1.5 py-1.5 text-xs border rounded bg-transparent border-gray-200 dark:border-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[60px] resize-y"
             />
           </label>
         </div>
