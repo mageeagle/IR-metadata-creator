@@ -30,7 +30,18 @@ interface EditorState {
 function createEmptyConfig(): ConfigModel {
   return {
     room: { width: 4, depth: 4, height: 4, originX: 0, originY: 0, originZ: 0 },
-    info: { data: '' },
+    info: {
+      data: '',
+      micElevation: undefined,
+      micModel: undefined,
+      spkElevation: undefined,
+      spkModel: undefined,
+      irMethod: undefined,
+      sweepDuration: undefined,
+      sweepFreqStart: undefined,
+      spaceMaterials: undefined,
+      roomGeometry: undefined,
+    },
     scenarios: [],
   };
 }
@@ -70,7 +81,18 @@ export function useEditorStore() {
 
       const config: ConfigModel = {
         room: { width: parsed.room.width, depth: parsed.room.depth, height: parsed.room.height, originX: parsed.room.originX, originY: parsed.room.originY, originZ: parsed.room.originZ },
-        info: { data: parsed.info.data ?? '' },
+        info: {
+          data: parsed.info.data ?? '',
+          micElevation: parsed.info.micElevation,
+          micModel: parsed.info.micModel,
+          spkElevation: parsed.info.spkElevation,
+          spkModel: parsed.info.spkModel,
+          irMethod: parsed.info.irMethod as 'sineSweep' | 'clap' | undefined,
+          sweepDuration: parsed.info.sweepDuration,
+          sweepFreqStart: parsed.info.sweepFreqStart,
+          spaceMaterials: parsed.info.spaceMaterials,
+          roomGeometry: parsed.info.roomGeometry,
+        },
         scenarios: parsed.scenarios.map((sc) => {
           const lockedSourcesArr: Array<Record<string, number>> = (sc.lockedSources as Array<Record<string, number>>) ?? [];
           const lockedSourceSingle = sc.lockedSource as Record<string, number> | undefined;
