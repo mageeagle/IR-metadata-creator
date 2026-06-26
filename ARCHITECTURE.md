@@ -360,6 +360,8 @@ A collapsible section containing all metadata fields:
 
 The section is collapsed by default and expands when the header is clicked.
 
+**State synchronization:** Two local states (`infoData` and `acousticMeta`) are kept in sync: `handleInfoChange` includes `...acousticMeta, data: value` and `handleAcousticChange` includes `...updated, data: infoData` so typing in either set of fields never overwrites the other.
+
 **Key refs:**
 - `xmlInputRef`: Hidden file input for XML import
 - `roomMapInputRef`: Hidden file input for room map upload
