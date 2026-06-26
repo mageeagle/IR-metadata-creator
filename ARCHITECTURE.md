@@ -93,8 +93,21 @@ interface Scenario {
 
 interface ConfigModel {
   room: RoomConfig;
-  info: { data: string };
+  info: InfoText;
   scenarios: Scenario[];
+}
+
+interface InfoText {
+  data: string;
+  micElevation?: number;        // Microphone elevation in meters
+  micModel?: string;            // Microphone model and type
+  spkElevation?: number;        // Speaker elevation in meters
+  spkModel?: string;            // Speaker model and type
+  irMethod?: 'sineSweep' | 'clap';  // Impulse response measurement method
+  sweepDuration?: number;       // Sine sweep duration in seconds
+  sweepFreqStart?: number;      // Sine sweep starting frequency in Hz
+  spaceMaterials?: string;      // Description of room/space materials
+  roomGeometry?: string;        // Description of space shape and dimensions
 }
 
 type BulkLoadTarget = 'sources' | 'receivers';
@@ -312,7 +325,8 @@ const defaultScale = Math.min(containerWidth / roomWidth, containerHeight / room
 2. **Room Map:** File input for room map image (JPG/PNG/WebP) with drag-and-drop support
 3. **Room Dimensions:** Width, Length (Y-axis), Height (Z-axis) inputs — all in a 3-column grid; Origin X/Y/Z also in a 3-column grid
 4. **Info:** Free-form text area
-5. **Bulk Load:** CSV textarea for bulk importing positions
+5. **Acoustic Metadata:** Collapsible section with 9 fields (mic/spk elevation, model/type, IR method, sweep settings, space materials, geometry)
+6. **Bulk Load:** CSV textarea for bulk importing positions
 6. **Scenarios:** List with selection, locked mode badges (S/R), source/receiver counts, delete buttons
 7. **Add Scenario:** Button to create new scenario
 
@@ -326,8 +340,25 @@ const defaultScale = Math.min(containerWidth / roomWidth, containerHeight / room
 - `bulkText`: String — raw CSV input
 - `room`: Partial<RoomConfig> — temporary room state before commit
 - `infoData`: String — temporary info text before commit
+- `acousticData`: Partial<InfoText> — temporary acoustic metadata before commit
+- `isAcousticCollapsed`: boolean — whether the acoustic metadata section is collapsed
 - `localRoomMapPreviewUrl`: String | null — synced with store's roomMapPreviewUrl
 - `localRoomMapImage`: File | null — synced with store's roomMapImage
+
+**Acoustic Metadata Section**
+
+A collapsible section that appears after the "Space Info" section. Contains 9 fields:
+- **Mic Elevation (m):** Number input for microphone height
+- **Mic Model/Type:** Text input for microphone identification
+- **Spk Elevation (m):** Number input for speaker height
+- **Spk Model/Type:** Text input for speaker identification
+- **IR Method:** Radio button selection ("Sine Sweep" or "Clap")
+- **Sweep Duration (s):** Number input (visible when IR Method = Sine Sweep)
+- **Sweep Freq Start (Hz):** Number input (visible when IR Method = Sine Sweep)
+- **Space Materials:** Textarea for room materials description
+- **Space Geometry:** Textarea for room shape/dimensions description
+
+The section is collapsed by default and expands when the header is clicked.
 
 **Key refs:**
 - `xmlInputRef`: Hidden file input for XML import
@@ -601,6 +632,21 @@ All elements are normalized to arrays (single element → `[element]`).
 </scenario>
 ```
 
+### Info Element Attributes
+
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `data` | string | Free-form info text |
+| `mic_elevation` | float | Microphone elevation in meters |
+| `mic_model` | string | Microphone model and type |
+| `spk_elevation` | float | Speaker elevation in meters |
+| `spk_model` | string | Speaker model and type |
+| `ir_method` | string | IR measurement method ("sineSweep" or "clap") |
+| `sweep_duration` | float | Sine sweep duration in seconds |
+| `sweep_freq_start` | float | Sine sweep starting frequency in Hz |
+| `space_materials` | string | Room materials description |
+| `space_geometry` | string | Room shape and dimensions description |
+
 ### Multi-channel Receivers
 
 When there are multiple sources or locked sources:
@@ -747,17 +793,28 @@ Tests XML serialization round-trip: parse → serialize → parse should produce
 
 The application supports exporting and importing the full editor state as JSON. This includes all config data, grid settings, and the manual image scale factor.
 
-### Exported Data (v1)
+### Exported Data (v2)
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "exportedAt": "2026-06-26T12:00:00.000Z",
   "config": { "room": {...}, "info": {...}, "scenarios": [...] },
   "gridSettings": { "snapToGrid": false, "gridSize": 1, "showGrid": false },
   "scaleFactor": null
 }
 ```
+
+### v2 Changes
+
+v2 adds acoustic metadata fields to the `info` object:
+- `micElevation`, `micModel`, `spkElevation`, `spkModel`
+- `irMethod`, `sweepDuration`, `sweepFreqStart`
+- `spaceMaterials`, `roomGeometry`
+
+### Backward Compatibility
+
+v1 files are still supported for import. Missing fields default to `undefined`.
 
 ### What is NOT exported
 
