@@ -49,8 +49,20 @@ export function serializeConfigToXML(config: ConfigModel): string {
   xml += `\t<room width="${toXmlAttr(config.room.width)}" depth="${toXmlAttr(config.room.depth)}" height="${toXmlAttr(config.room.height)}" origin_x="${toXmlAttr(config.room.originX)}" origin_y="${toXmlAttr(config.room.originY)}" origin_z="${toXmlAttr(config.room.originZ)}"/>\n`;
 
   // Info
-  if (config.info.data) {
-    xml += `\n\t<info data="${config.info.data}"/>\n`;
+  const infoAttrs = [
+    config.info.data ? `data="${config.info.data}"` : undefined,
+    config.info.micElevation !== undefined ? `mic_elevation="${toXmlAttr(config.info.micElevation)}"` : undefined,
+    config.info.micModel ? `mic_model="${config.info.micModel}"` : undefined,
+    config.info.spkElevation !== undefined ? `spk_elevation="${toXmlAttr(config.info.spkElevation)}"` : undefined,
+    config.info.spkModel ? `spk_model="${config.info.spkModel}"` : undefined,
+    config.info.irMethod ? `ir_method="${config.info.irMethod}"` : undefined,
+    config.info.sweepDuration !== undefined ? `sweep_duration="${toXmlAttr(config.info.sweepDuration)}"` : undefined,
+    config.info.sweepFreqStart !== undefined ? `sweep_freq_start="${toXmlAttr(config.info.sweepFreqStart)}"` : undefined,
+    config.info.spaceMaterials ? `space_materials="${config.info.spaceMaterials}"` : undefined,
+    config.info.roomGeometry ? `space_geometry="${config.info.roomGeometry}"` : undefined,
+  ].filter(Boolean);
+  if (infoAttrs.length > 0) {
+    xml += `\n\t<info ${infoAttrs.join(' ')} />\n`;
   }
 
   // Scenarios

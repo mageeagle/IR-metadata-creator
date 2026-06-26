@@ -9,7 +9,18 @@ export interface ParsedConfig {
     originY: number;
     originZ: number;
   };
-  info: { data: string };
+  info: {
+    data: string;
+    micElevation?: number;
+    micModel?: string;
+    spkElevation?: number;
+    spkModel?: string;
+    irMethod?: string;
+    sweepDuration?: number;
+    sweepFreqStart?: number;
+    spaceMaterials?: string;
+    roomGeometry?: string;
+  };
   scenarios: Array<{
     name: string;
     locked: 'source' | 'receiver' | 'none';
@@ -80,6 +91,15 @@ export function parseConfigXML(xmlString: string): ParsedConfig {
   const infoEl = (Array.isArray(infoItems) ? infoItems[0] : infoItems) || {};
   const info = {
     data: getAttr(infoEl, '_data') || '',
+    micElevation: getNum(infoEl, '_mic_elevation'),
+    micModel: getAttr(infoEl, '_mic_model') || undefined,
+    spkElevation: getNum(infoEl, '_spk_elevation'),
+    spkModel: getAttr(infoEl, '_spk_model') || undefined,
+    irMethod: getAttr(infoEl, '_ir_method') || undefined,
+    sweepDuration: getNum(infoEl, '_sweep_duration'),
+    sweepFreqStart: getNum(infoEl, '_sweep_freq_start'),
+    spaceMaterials: getAttr(infoEl, '_space_materials') || undefined,
+    roomGeometry: getAttr(infoEl, '_space_geometry') || undefined,
   };
 
   // Parse scenarios
