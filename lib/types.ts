@@ -18,6 +18,15 @@ export interface RoomConfig {
 
 export interface InfoText {
   data: string;
+  micElevation?: number;
+  micModel?: string;
+  spkElevation?: number;
+  spkModel?: string;
+  irMethod?: 'sineSweep' | 'clap';
+  sweepDuration?: number;
+  sweepFreqStart?: number;
+  spaceMaterials?: string;
+  roomGeometry?: string;
 }
 
 export interface Source {
