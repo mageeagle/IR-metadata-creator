@@ -13,6 +13,8 @@ interface EditorState {
   selectedMarkerId: string | null;
   loadXML: (xmlString: string) => void;
   exportFile: () => unknown;
+  exportJSON: () => void;
+  importJSON: (jsonString: string) => void;
   addScenario: (name?: string) => void;
   deleteScenario: (id: string) => void;
   updateScenario: (id: string, updates: { name?: string; locked?: 'source' | 'receiver' | 'none' }) => void;
@@ -31,8 +33,9 @@ interface EditorState {
 }
 
 export default function Sidebar(props: EditorState) {
-  const { config, roomMapImage, roomMapPreviewUrl, selectedScenarioId, loadXML, loadRoomMap, exportFile, addScenario, deleteScenario, bulkLoad, setRoom, setInfo, clearAll, updateScenario: updateScenarioFn, setSelectedScenarioId } = props;
+  const { config, roomMapImage, roomMapPreviewUrl, selectedScenarioId, loadXML, loadRoomMap, exportFile, exportJSON, importJSON, addScenario, deleteScenario, bulkLoad, setRoom, setInfo, clearAll, updateScenario: updateScenarioFn, setSelectedScenarioId } = props;
   const xmlInputRef = useRef<HTMLInputElement>(null);
+  const jsonInputRef = useRef<HTMLInputElement>(null);
   const roomMapInputRef = useRef<HTMLInputElement>(null);
   const [bulkTarget, setBulkTarget] = useState<'sources' | 'receivers'>('sources');
   const [bulkText, setBulkText] = useState('');
@@ -80,6 +83,22 @@ export default function Sidebar(props: EditorState) {
     URL.revokeObjectURL(url);
   }, [config]);
 
+  const handleJsonImport = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const jsonString = reader.result as string;
+      importJSON(jsonString);
+    };
+    reader.readAsText(file);
+    if (jsonInputRef.current) jsonInputRef.current.value = '';
+  }, [importJSON]);
+
+  const handleJsonExport = useCallback(() => {
+    exportJSON();
+  }, [exportJSON]);
+
   const handleRoomMapChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -124,7 +143,7 @@ export default function Sidebar(props: EditorState) {
     <aside className="w-[340px] min-w-[340px] max-w-[340px] border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 overflow-y-auto">
       {/* Header Toolbar */}
       <div className="p-4 pb-2">
-        <div className="flex gap-1.5 mb-2">
+        <div className="flex gap-1.5 mb-2 flex-wrap">
           <input
             ref={xmlInputRef}
             type="file"
@@ -132,8 +151,17 @@ export default function Sidebar(props: EditorState) {
             onChange={handleXmlImport}
             className="hidden"
           />
+          <input
+            ref={jsonInputRef}
+            type="file"
+            accept=".json"
+            onChange={handleJsonImport}
+            className="hidden"
+          />
           <Button variant="default" onClick={() => xmlInputRef.current?.click()}>Import XML</Button>
+          <Button variant="default" onClick={() => jsonInputRef.current?.click()}>Import JSON</Button>
           <Button variant="primary" onClick={handleXmlExport} disabled={!config}>Export XML</Button>
+          <Button variant="primary" onClick={handleJsonExport} disabled={!config}>Export JSON</Button>
         </div>
         <Button variant="danger" onClick={clearAll} className="w-full">Clear All</Button>
       </div>

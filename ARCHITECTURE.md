@@ -720,3 +720,31 @@ Tests XML serialization round-trip: parse → serialize → parse should produce
 5. **Zoom/Pan:** Not implemented — canvas uses percentage-based positioning
 6. **Dark mode:** Already supported via Tailwind `dark:` variants
 7. **i18n:** Not implemented — all labels are English
+ 
+ ---
+
+## JSON Export/Import
+
+The application supports exporting and importing the full editor state as JSON. This includes all config data, grid settings, and the manual image scale factor.
+
+### Exported Data (v1)
+
+```json
+{
+  "version": 1,
+  "exportedAt": "2026-06-26T12:00:00.000Z",
+  "config": { "room": {...}, "info": {...}, "scenarios": [...] },
+  "gridSettings": { "snapToGrid": false, "gridSize": 1, "showGrid": false },
+  "scaleFactor": null
+}
+```
+
+### What is NOT exported
+
+- **Room map image** ??The image is not embedded in the JSON. When importing, the user must re-upload the room map image separately.
+
+### Important
+
+**Every time a new piece of data is added to the editor state (new metadata, settings, or features), the JSON export/import feature must be updated to include it.** This ensures the JSON file remains a complete representation of the editor state and allows full restoration of all settings when importing.
+
+---

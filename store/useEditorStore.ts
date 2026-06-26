@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, createContext, useContext } from 'rea
 import type { ConfigModel, Source, Receiver, Position, BulkLoadTarget, RoomConfig, GridSettings } from '../lib/types';
 import { parseConfigXML } from '../lib/xml-parser';
 import { serializeConfigToXML } from '../lib/xml-serializer';
+import { exportToJSON, importFromJSON } from '../lib/json-export';
 
 const STORAGE_KEY = 'room-z-preset-maker';
 
@@ -23,6 +24,7 @@ interface EditorState {
     startMouseY: number;
   } | null;
   gridSettings: GridSettings;
+  scaleFactor: number | null;
 }
 
 function createEmptyConfig(): ConfigModel {
@@ -44,18 +46,19 @@ export function useEditorStore() {
       if (saved) {
         const parsed = JSON.parse(saved);
         const savedGrid = parsed.gridSettings as GridSettings | undefined;
+        const savedScale = parsed.scaleFactor as number | null | undefined;
         const gridDefaults: GridSettings = { snapToGrid: false, gridSize: 1, showGrid: false };
-        return { ...parsed, roomMapImage: null, roomMapPreviewUrl: null, gridSettings: savedGrid || gridDefaults };
+        return { ...parsed, roomMapImage: null, roomMapPreviewUrl: null, gridSettings: savedGrid || gridDefaults, scaleFactor: savedScale ?? null };
       }
     } catch {
       // Ignore parse errors
     }
-    return { config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null, gridSettings: { snapToGrid: false, gridSize: 1, showGrid: false } };
+    return { config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null, gridSettings: { snapToGrid: false, gridSize: 1, showGrid: false }, scaleFactor: null };
   });
 
-  const saveToLocalStorage = useCallback((config: ConfigModel) => {
+  const saveToLocalStorage = useCallback((config: ConfigModel, gridSettings: GridSettings, scaleFactor: number | null) => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ config }));
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ config, gridSettings, scaleFactor }));
     } catch {
       // Storage full or unavailable
     }
@@ -382,7 +385,7 @@ export function useEditorStore() {
     if (state.roomMapPreviewUrl) {
       URL.revokeObjectURL(state.roomMapPreviewUrl);
     }
-    setState({ config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null, gridSettings: { snapToGrid: false, gridSize: 1, showGrid: false } });
+    setState({ config: null, roomMapImage: null, roomMapPreviewUrl: null, selectedScenarioId: null, selectedMarkerId: null, dragRoomPos: null, dragState: null, gridSettings: { snapToGrid: false, gridSize: 1, showGrid: false }, scaleFactor: null });
   }, [state.roomMapPreviewUrl]);
 
   const setSelectedScenarioId = useCallback((id: string | null) => {
@@ -430,14 +433,51 @@ export function useEditorStore() {
     setState(prev => ({ ...prev, gridSettings: { ...prev.gridSettings, showGrid } }));
   }, []);
 
+  const setScaleFactor = useCallback((scaleFactor: number | null) => {
+    setState(prev => ({ ...prev, scaleFactor }));
+  }, []);
+
+  const importJSON = useCallback((jsonString: string) => {
+    try {
+      const { config, gridSettings, scaleFactor } = importFromJSON(jsonString);
+      setState(prev => ({
+        ...prev,
+        config,
+        gridSettings,
+        scaleFactor,
+        selectedScenarioId: null,
+        selectedMarkerId: null,
+      }));
+    } catch (err) {
+      console.error('Failed to import JSON:', err);
+    }
+  }, []);
+
+  const exportJSON = useCallback(() => {
+    if (!state.config) return;
+    const jsonString = exportToJSON(state.config, state.gridSettings, state.scaleFactor);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'room-z-preset.json';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }, [state.config, state.gridSettings, state.scaleFactor]);
+
   useEffect(() => {
-    if (state.config) saveToLocalStorage(state.config);
-  }, [state.config, saveToLocalStorage]);
+    if (state.config) saveToLocalStorage(state.config, state.gridSettings, state.scaleFactor);
+  }, [state.config, state.gridSettings, state.scaleFactor, saveToLocalStorage]);
 
   return {
     ...state,
     loadXML,
     exportFile,
+    exportJSON,
+    importJSON,
+    setScaleFactor,
     addScenario,
     deleteScenario,
     updateScenario,

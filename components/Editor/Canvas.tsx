@@ -42,6 +42,7 @@ interface EditorState {
   setSnapToGrid: (snapToGrid: boolean) => void;
   setGridSize: (gridSize: number) => void;
   setShowGrid: (showGrid: boolean) => void;
+  onJsonImported?: () => void;
 }
 
 function getPixelsPerMeter(room: RoomConfig | undefined, imgNaturalWidth: number, imgNaturalHeight: number): { pxPerMeterX: number; pxPerMeterY: number } {
@@ -102,6 +103,7 @@ function Canvas({
   setSnapToGrid,
   setGridSize,
   setShowGrid,
+  onJsonImported,
 }: EditorState) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
@@ -216,6 +218,13 @@ function Canvas({
   }, [updatePosition, updateLockedPosition, setDragState, setDragRoomPos, handleMouseMove, gridSettings]);
 
   mouseUpRef.current = handleMouseUp;
+
+  const handleJsonImported = useCallback(() => {
+    setScaleFactor(null);
+    if (onJsonImported) {
+      onJsonImported();
+    }
+  }, [onJsonImported]);
 
   const selectedScenario = config?.scenarios.find((s) => s.id === selectedScenarioId);
 
