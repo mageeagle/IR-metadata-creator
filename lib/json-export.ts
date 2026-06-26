@@ -1,7 +1,7 @@
 import type { ConfigModel, GridSettings } from './types';
 
-interface JSONExportV1 {
-  version: 1;
+interface JSONExportV2 {
+  version: 2;
   exportedAt: string;
   config: ConfigModel;
   gridSettings: GridSettings;
@@ -19,8 +19,8 @@ export function exportToJSON(
   gridSettings: GridSettings,
   scaleFactor: number | null
 ): string {
-  const exportData: JSONExportV1 = {
-    version: 1,
+  const exportData: JSONExportV2 = {
+    version: 2,
     exportedAt: new Date().toISOString(),
     config,
     gridSettings,
@@ -33,10 +33,11 @@ export function exportToJSON(
 export function importFromJSON(
   jsonString: string
 ): { config: ConfigModel; gridSettings: GridSettings; scaleFactor: number | null } {
-  const parsed = JSON.parse(jsonString) as Partial<JSONExportV1>;
+  const parsed: { version?: number; config?: ConfigModel; gridSettings?: GridSettings; scaleFactor?: number | null } = JSON.parse(jsonString);
 
-  if (parsed.version !== 1) {
-    throw new Error(`Unsupported export version: ${parsed.version}. Expected version 1.`);
+  const version = parsed.version as number | undefined;
+  if (version !== 1 && version !== 2) {
+    throw new Error(`Unsupported export version: ${version}. Expected version 1 or 2.`);
   }
 
   if (!parsed.config) {
